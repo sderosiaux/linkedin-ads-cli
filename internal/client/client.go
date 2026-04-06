@@ -60,26 +60,48 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if query != nil {
 		u.RawQuery = query.Encode()
 	}
-	var reader io.Reader
+	var bodyBytes []byte
 	if body != nil {
-		b, err := json.Marshal(body)
+		bodyBytes, err = json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		reader = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), reader) //nolint:gosec // base URL from trusted config
-	if err != nil {
-		return nil, err
+
+	var resp *http.Response
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		var reader io.Reader
+		if bodyBytes != nil {
+			reader = bytes.NewReader(bodyBytes)
+		}
+		req, rerr := http.NewRequestWithContext(ctx, method, u.String(), reader) //nolint:gosec // base URL from trusted config
+		if rerr != nil {
+			return nil, rerr
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Linkedin-Version", c.version)
+		req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+		req.Header.Set("Accept", "application/json")
+		if bodyBytes != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		resp, err = c.http.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if !shouldRetry(resp.StatusCode) || attempt == maxAttempts-1 {
+			return resp, nil
+		}
+		d := retryDelay(resp, attempt)
+		_ = resp.Body.Close()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(d):
+		}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Linkedin-Version", c.version)
-	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	return c.http.Do(req)
+	return resp, nil
 }
 
 // GetJSON issues a GET and decodes the JSON response body into out.
