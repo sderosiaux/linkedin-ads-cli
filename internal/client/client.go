@@ -37,6 +37,10 @@ type Client struct {
 	verbose bool
 }
 
+// BaseURL returns the configured base URL (e.g. https://api.linkedin.com/rest).
+// Used by pagination to extract the path+query from absolute paging.links hrefs.
+func (c *Client) BaseURL() string { return c.base }
+
 // New returns a Client configured from o.
 func New(o Options) *Client {
 	h := o.HTTP

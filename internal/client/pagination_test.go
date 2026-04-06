@@ -92,6 +92,75 @@ func TestPaginateStartCountRaw_PreservesTupleSyntax(t *testing.T) {
 	}
 }
 
+func TestPaginateStartCount_FollowsLinkRelNext(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		if r.URL.Path != "/items" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		var body string
+		switch r.URL.Query().Get("cursor") {
+		case "":
+			body = `{"elements":[{"id":1}],"paging":{"start":0,"count":1,"total":3,"links":[{"rel":"next","href":"` + base + `/items?cursor=abc"}]}}`
+		case "abc":
+			body = `{"elements":[{"id":2}],"paging":{"start":1,"count":1,"total":3,"links":[{"rel":"next","href":"` + base + `/items?cursor=def"}]}}`
+		case "def":
+			body = `{"elements":[{"id":3}],"paging":{"start":2,"count":1,"total":3}}`
+		default:
+			t.Errorf("unexpected cursor: %q", r.URL.Query().Get("cursor"))
+		}
+		_, _ = w.Write([]byte(body)) //nolint:gosec // test fixture
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	var all []map[string]any
+	if err := PaginateStartCount(context.Background(), c, "/items", nil, 1, 0, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3, got %d: %v", len(all), all)
+	}
+	for i, item := range all {
+		if item["id"].(float64) != float64(i+1) {
+			t.Errorf("index %d: %v", i, item)
+		}
+	}
+}
+
+func TestPaginateStartCountRaw_FollowsLinkRelNext(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		var body string
+		switch r.URL.Query().Get("cursor") {
+		case "":
+			// initial call: tuple-shaped query preserved
+			if !strings.Contains(r.URL.RawQuery, "search=(account:(values:List(urn:li:sponsoredAccount:9)))") {
+				t.Errorf("missing tuple in initial query: %s", r.URL.RawQuery)
+			}
+			body = `{"elements":[{"id":1}],"paging":{"start":0,"count":1,"total":2,"links":[{"rel":"next","href":"` + base + `/items?cursor=abc"}]}}`
+		case "abc":
+			body = `{"elements":[{"id":2}],"paging":{"start":1,"count":1,"total":2}}`
+		default:
+			t.Errorf("unexpected cursor: %q", r.URL.Query().Get("cursor"))
+		}
+		_, _ = w.Write([]byte(body)) //nolint:gosec // test fixture
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	rawQuery := "q=search&search=(account:(values:List(urn:li:sponsoredAccount:9)))"
+	var all []map[string]any
+	if err := PaginateStartCountRaw(context.Background(), c, "/items", rawQuery, 1, 0, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2, got %d", len(all))
+	}
+}
+
 func TestPaginateToken(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
