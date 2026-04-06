@@ -42,3 +42,46 @@ func GetCampaignGroup(ctx context.Context, c *client.Client, id string) (*Campai
 	}
 	return &g, nil
 }
+
+// CreateCampaignGroupInput is the request body for POST /adCampaignGroups.
+// Account must be a full URN.
+type CreateCampaignGroupInput struct {
+	Account     string     `json:"account"`
+	Name        string     `json:"name"`
+	Status      string     `json:"status"`
+	TotalBudget *Money     `json:"totalBudget,omitempty"`
+	RunSchedule *DateRange `json:"runSchedule,omitempty"`
+}
+
+// CreateCampaignGroup creates a new campaign group and returns the new id.
+// Status defaults to DRAFT when unset.
+func CreateCampaignGroup(ctx context.Context, c *client.Client, in *CreateCampaignGroupInput) (string, error) {
+	if in.Status == "" {
+		in.Status = "DRAFT"
+	}
+	return c.PostJSON(ctx, "/adCampaignGroups", in, nil)
+}
+
+// UpdateCampaignGroupInput is the partial-update body for a campaign group.
+// All fields are pointers so unset fields are omitted from the wire payload —
+// LinkedIn's $set semantics treat absent keys as untouched.
+type UpdateCampaignGroupInput struct {
+	Status      *string    `json:"status,omitempty"`
+	Name        *string    `json:"name,omitempty"`
+	TotalBudget *Money     `json:"totalBudget,omitempty"`
+	RunSchedule *DateRange `json:"runSchedule,omitempty"`
+}
+
+// UpdateCampaignGroup applies a partial update to a campaign group via the
+// Rest.li PARTIAL_UPDATE protocol.
+func UpdateCampaignGroup(ctx context.Context, c *client.Client, id string, in *UpdateCampaignGroupInput) error {
+	body := map[string]any{
+		"patch": map[string]any{"$set": in},
+	}
+	return c.PartialUpdate(ctx, "/adCampaignGroups/"+id, body)
+}
+
+// DeleteCampaignGroup deletes a campaign group by id.
+func DeleteCampaignGroup(ctx context.Context, c *client.Client, id string) error {
+	return c.Delete(ctx, "/adCampaignGroups/"+id)
+}

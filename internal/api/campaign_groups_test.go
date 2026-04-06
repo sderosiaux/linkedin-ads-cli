@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -80,6 +81,121 @@ func TestListCampaignGroups(t *testing.T) {
 	}
 	if len(g.ServingStatuses) != 1 || g.ServingStatuses[0] != "RUNNABLE" {
 		t.Errorf("servingStatuses: %+v", g.ServingStatuses)
+	}
+}
+
+func TestCreateCampaignGroup(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("X-LinkedIn-Id", "555")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	in := &CreateCampaignGroupInput{
+		Account: "urn:li:sponsoredAccount:12345",
+		Name:    "Q2 Brand",
+		TotalBudget: &Money{
+			CurrencyCode: "USD",
+			Amount:       "5000",
+		},
+		RunSchedule: &DateRange{Start: 1745000000000},
+	}
+	id, err := CreateCampaignGroup(context.Background(), c, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method: %q", gotMethod)
+	}
+	if gotPath != "/adCampaignGroups" {
+		t.Errorf("path: %q", gotPath)
+	}
+	if id != "555" {
+		t.Errorf("id: %q", id)
+	}
+	if gotBody["account"] != "urn:li:sponsoredAccount:12345" {
+		t.Errorf("body account: %+v", gotBody)
+	}
+	if gotBody["name"] != "Q2 Brand" {
+		t.Errorf("body name: %+v", gotBody)
+	}
+	// Defaults Status to DRAFT when not provided.
+	if gotBody["status"] != "DRAFT" {
+		t.Errorf("body status: %+v", gotBody)
+	}
+	tb, ok := gotBody["totalBudget"].(map[string]any)
+	if !ok || tb["amount"] != "5000" || tb["currencyCode"] != "USD" {
+		t.Errorf("body totalBudget: %+v", gotBody["totalBudget"])
+	}
+	rs, ok := gotBody["runSchedule"].(map[string]any)
+	if !ok {
+		t.Errorf("body runSchedule missing: %+v", gotBody)
+	} else if int64(rs["start"].(float64)) != 1745000000000 {
+		t.Errorf("body runSchedule start: %+v", rs)
+	}
+}
+
+func TestUpdateCampaignGroupOnlyStatus(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath, gotRestliMethod string
+	var gotBodyRaw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotRestliMethod = r.Header.Get("X-RestLi-Method")
+		gotBodyRaw, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	status := "ACTIVE"
+	if err := UpdateCampaignGroup(context.Background(), c, "111", &UpdateCampaignGroupInput{
+		Status: &status,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method: %q", gotMethod)
+	}
+	if gotPath != "/adCampaignGroups/111" {
+		t.Errorf("path: %q", gotPath)
+	}
+	if gotRestliMethod != "PARTIAL_UPDATE" {
+		t.Errorf("X-RestLi-Method: %q", gotRestliMethod)
+	}
+	expected := `{"patch":{"$set":{"status":"ACTIVE"}}}`
+	if strings.TrimSpace(string(gotBodyRaw)) != expected {
+		t.Errorf("body:\n got: %s\nwant: %s", string(gotBodyRaw), expected)
+	}
+}
+
+func TestDeleteCampaignGroup(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	if err := DeleteCampaignGroup(context.Background(), c, "111"); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method: %q", gotMethod)
+	}
+	if gotPath != "/adCampaignGroups/111" {
+		t.Errorf("path: %q", gotPath)
 	}
 }
 

@@ -3,10 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/resolve"
+	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +18,13 @@ func newCampaignGroupsCmd() *cobra.Command {
 		Use:   "campaign-groups",
 		Short: "List and inspect ad campaign groups",
 	}
-	root.AddCommand(newCampaignGroupsListCmd(), newCampaignGroupsGetCmd())
+	root.AddCommand(
+		newCampaignGroupsListCmd(),
+		newCampaignGroupsGetCmd(),
+		newCampaignGroupsCreateCmd(),
+		newCampaignGroupsUpdateCmd(),
+		newCampaignGroupsDeleteCmd(),
+	)
 	return root
 }
 
@@ -88,6 +97,173 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 			})
 		},
 	}
+}
+
+func newCampaignGroupsCreateCmd() *cobra.Command {
+	var (
+		name        string
+		totalBudget int64
+		currency    string
+		startStr    string
+		endStr      string
+		status      string
+	)
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new campaign group",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			in := &api.CreateCampaignGroupInput{
+				Account: urn.Wrap(urn.Account, accountID),
+				Name:    name,
+				Status:  status,
+				TotalBudget: &api.Money{
+					CurrencyCode: currency,
+					Amount:       strconv.FormatInt(totalBudget, 10),
+				},
+			}
+			if in.Status == "" {
+				in.Status = "DRAFT"
+			}
+			if startStr != "" || endStr != "" {
+				rs, err := parseDateRangeMillis(startStr, endStr)
+				if err != nil {
+					return err
+				}
+				in.RunSchedule = rs
+			}
+			return executeWrite(cmd, "POST /adCampaignGroups", in, func() error {
+				id, err := api.CreateCampaignGroup(cmd.Context(), c, in)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created campaign group %s\n", id)
+				return err
+			})
+		},
+	}
+	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
+	cmd.Flags().StringVar(&name, "name", "", "Campaign group name (required)")
+	cmd.Flags().Int64Var(&totalBudget, "total-budget", 0, "Total budget amount (required)")
+	cmd.Flags().StringVar(&currency, "currency", "USD", "Currency code")
+	cmd.Flags().StringVar(&startStr, "start", "", "Start date YYYY-MM-DD")
+	cmd.Flags().StringVar(&endStr, "end", "", "End date YYYY-MM-DD")
+	cmd.Flags().StringVar(&status, "status", "DRAFT", "Initial status (DRAFT, ACTIVE, ...)")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("total-budget")
+	return cmd
+}
+
+func newCampaignGroupsUpdateCmd() *cobra.Command {
+	var (
+		name        string
+		status      string
+		totalBudget int64
+		currency    string
+		startStr    string
+		endStr      string
+	)
+	cmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Partially update a campaign group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, _, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			in := &api.UpdateCampaignGroupInput{}
+			if cmd.Flags().Changed("name") {
+				in.Name = &name
+			}
+			if cmd.Flags().Changed("status") {
+				in.Status = &status
+			}
+			if cmd.Flags().Changed("total-budget") {
+				in.TotalBudget = &api.Money{
+					CurrencyCode: currency,
+					Amount:       strconv.FormatInt(totalBudget, 10),
+				}
+			}
+			if startStr != "" || endStr != "" {
+				rs, err := parseDateRangeMillis(startStr, endStr)
+				if err != nil {
+					return err
+				}
+				in.RunSchedule = rs
+			}
+			payload := map[string]any{
+				"patch": map[string]any{"$set": in},
+			}
+			summary := "POST /adCampaignGroups/" + args[0]
+			return executeWrite(cmd, summary, payload, func() error {
+				if err := api.UpdateCampaignGroup(cmd.Context(), c, args[0], in); err != nil {
+					return err
+				}
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Updated campaign group %s\n", args[0])
+				return err
+			})
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "New name")
+	cmd.Flags().StringVar(&status, "status", "", "New status (DRAFT, ACTIVE, PAUSED, ARCHIVED, ...)")
+	cmd.Flags().Int64Var(&totalBudget, "total-budget", 0, "New total budget amount")
+	cmd.Flags().StringVar(&currency, "currency", "USD", "Currency code (used with --total-budget)")
+	cmd.Flags().StringVar(&startStr, "start", "", "New start date YYYY-MM-DD")
+	cmd.Flags().StringVar(&endStr, "end", "", "New end date YYYY-MM-DD")
+	return cmd
+}
+
+func newCampaignGroupsDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a campaign group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, _, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			summary := "DELETE /adCampaignGroups/" + args[0]
+			return executeWrite(cmd, summary, map[string]any{"id": args[0]}, func() error {
+				if err := api.DeleteCampaignGroup(cmd.Context(), c, args[0]); err != nil {
+					return err
+				}
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted campaign group %s\n", args[0])
+				return err
+			})
+		},
+	}
+	return cmd
+}
+
+// parseDateRangeMillis converts YYYY-MM-DD --start/--end strings into a
+// LinkedIn DateRange measured in epoch milliseconds. Either bound may be empty.
+func parseDateRangeMillis(startStr, endStr string) (*api.DateRange, error) {
+	rs := &api.DateRange{}
+	if startStr != "" {
+		t, err := time.Parse(dateLayout, startStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date: --start %q (want YYYY-MM-DD)", startStr)
+		}
+		rs.Start = t.UnixMilli()
+	}
+	if endStr != "" {
+		t, err := time.Parse(dateLayout, endStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date: --end %q (want YYYY-MM-DD)", endStr)
+		}
+		rs.End = t.UnixMilli()
+	}
+	return rs, nil
 }
 
 // uniqueAccountURNs collects deduplicated, non-empty Account URNs from a
