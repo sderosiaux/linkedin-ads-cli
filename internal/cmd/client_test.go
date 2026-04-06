@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,6 +81,60 @@ func TestClientFromConfig_DefaultsAPIVersion(t *testing.T) {
 	}
 	if cfg.APIVersion == "" {
 		t.Error("APIVersion should be defaulted")
+	}
+}
+
+func TestClientFromConfig_VersionDateOverride(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	var gotVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotVersion = r.Header.Get("Linkedin-Version")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath, "--version-date", "202605"}); err != nil {
+		t.Fatal(err)
+	}
+	cli, _, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	var out any
+	if err := cli.GetJSON(context.Background(), "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if gotVersion != "202605" {
+		t.Errorf("Linkedin-Version: got %q, want 202605", gotVersion)
+	}
+}
+
+func TestClientFromConfig_VersionDateInvalid(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath, "--version-date", "2026-05"}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := clientFromConfig(root)
+	if err == nil {
+		t.Fatal("expected error for invalid --version-date")
+	}
+	if !strings.Contains(err.Error(), "YYYYMM") {
+		t.Errorf("error should mention YYYYMM, got: %v", err)
 	}
 }
 

@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
 	"github.com/spf13/cobra"
 )
+
+var versionDatePattern = regexp.MustCompile(`^\d{6}$`)
 
 const defaultBaseURL = "https://api.linkedin.com/rest"
 
@@ -36,6 +39,13 @@ func clientFromConfig(cmd *cobra.Command) (*client.Client, *config.Config, error
 	if c.APIVersion == "" {
 		c.APIVersion = defaultAPIVersion
 	}
+	apiVersion := c.APIVersion
+	if v, _ := cmd.Root().PersistentFlags().GetString("version-date"); v != "" {
+		if !versionDatePattern.MatchString(v) {
+			return nil, nil, fmt.Errorf("invalid --version-date: expected YYYYMM (6 digits)")
+		}
+		apiVersion = v
+	}
 	base := defaultBaseURL
 	if v := os.Getenv("LINKEDIN_ADS_BASE_URL"); v != "" {
 		base = v
@@ -43,6 +53,6 @@ func clientFromConfig(cmd *cobra.Command) (*client.Client, *config.Config, error
 	return client.New(client.Options{
 		BaseURL:    base,
 		Token:      c.Token,
-		APIVersion: c.APIVersion,
+		APIVersion: apiVersion,
 	}), c, nil
 }
