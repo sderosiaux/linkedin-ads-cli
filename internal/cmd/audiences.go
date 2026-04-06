@@ -36,6 +36,9 @@ func newAudiencesListCmd() *cobra.Command {
 				return err
 			}
 			return writeOutput(cmd, auds, func() string {
+				if len(auds) == 0 {
+					return fmt.Sprintf("No matched or lookalike audiences for account %s.\n", accountID)
+				}
 				var b strings.Builder
 				b.WriteString("ID         NAME                TYPE         STATUS    AUDIENCE  MATCHED\n")
 				for _, a := range auds {

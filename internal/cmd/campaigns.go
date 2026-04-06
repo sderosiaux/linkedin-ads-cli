@@ -81,6 +81,9 @@ func runCampaignsList(cmd *cobra.Command, _ []string) error {
 		resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
 	}
 	return writeOutputWithResolved(cmd, camps, resolved, func() string {
+		if len(camps) == 0 {
+			return fmt.Sprintf("No campaigns in account %s.\nCreate one with: linkedin-ads campaigns create --group <id> --name ... --daily-budget ...\n", accountID)
+		}
 		var b strings.Builder
 		b.WriteString("ID         NAME                STATUS    TYPE                 OBJECTIVE          COST\n")
 		for _, x := range camps {

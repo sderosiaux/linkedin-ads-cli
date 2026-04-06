@@ -86,6 +86,9 @@ func newLeadsFormsListCmd() *cobra.Command {
 				return err
 			}
 			return writeOutput(cmd, forms, func() string {
+				if len(forms) == 0 {
+					return fmt.Sprintf("No lead-gen forms for account %s.\n", accountID)
+				}
 				var b strings.Builder
 				b.WriteString("ID         NAME                STATUS    HEADLINE\n")
 				for _, f := range forms {

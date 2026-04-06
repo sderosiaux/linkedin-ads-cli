@@ -86,6 +86,37 @@ func TestCampaignGroupsBare_DelegatesToList(t *testing.T) {
 	}
 }
 
+func TestCampaignGroupsList_EmptyState_Terminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaign-groups", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "No campaign groups in account 777") {
+		t.Errorf("expected actionable empty-state hint, got: %s", s)
+	}
+	if !strings.Contains(s, "campaign-groups create") {
+		t.Errorf("expected create hint, got: %s", s)
+	}
+}
+
 func TestCampaignGroupsList_Compact(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"elements":[

@@ -184,6 +184,74 @@ func TestAccountsBare_DelegatesToList(t *testing.T) {
 	}
 }
 
+func TestAccountsList_EmptyState_Terminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{},
+			"paging":   map[string]any{"start": 0, "count": 0, "total": 0},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "accounts", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "No ad accounts accessible") {
+		t.Errorf("expected actionable empty-state hint, got: %s", s)
+	}
+	if strings.Contains(s, "STATUS") {
+		t.Errorf("did not expect bare header row on empty list, got: %s", s)
+	}
+}
+
+func TestAccountsList_EmptyState_JSONReturnsArray(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{},
+			"paging":   map[string]any{"start": 0, "count": 0, "total": 0},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "accounts", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := strings.TrimSpace(out.String())
+	if s != "[]" && s != "null" {
+		t.Errorf("expected [] or null in JSON empty mode, got: %s", s)
+	}
+	if strings.Contains(s, "No ad accounts") {
+		t.Errorf("hint should not appear in --json mode, got: %s", s)
+	}
+}
+
 func TestAccountsList_MissingTokenIsCleanError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

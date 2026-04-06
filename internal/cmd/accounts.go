@@ -41,6 +41,9 @@ func runAccountsList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return writeOutput(cmd, accts, func() string {
+		if len(accts) == 0 {
+			return "No ad accounts accessible.\n"
+		}
 		var b strings.Builder
 		b.WriteString("ID         NAME                STATUS   TYPE       CURRENCY\n")
 		for _, a := range accts {

@@ -37,6 +37,9 @@ func newCreativesListCmd() *cobra.Command {
 				return err
 			}
 			return writeOutput(cmd, creatives, func() string {
+				if len(creatives) == 0 {
+					return fmt.Sprintf("No creatives on campaign %s.\n", campaignID)
+				}
 				var b strings.Builder
 				b.WriteString("ID                                 STATUS    REVIEW    CAMPAIGN\n")
 				for _, cr := range creatives {

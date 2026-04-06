@@ -36,6 +36,9 @@ func newConversionsListCmd() *cobra.Command {
 				return err
 			}
 			return writeOutput(cmd, convs, func() string {
+				if len(convs) == 0 {
+					return fmt.Sprintf("No conversion definitions for account %s.\n", accountID)
+				}
 				var b strings.Builder
 				b.WriteString("ID         NAME                TYPE         ENABLED  ATTRIBUTION\n")
 				for _, c := range convs {
