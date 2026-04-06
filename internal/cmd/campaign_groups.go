@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
+	"github.com/sderosiaux/linkedin-ads-cli/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +47,12 @@ func newCampaignGroupsListCmd() *cobra.Command {
 				}
 				groups = filtered
 			}
-			return writeOutput(cmd, groups, func() string {
+			var resolved map[string]string
+			if resolveFlag(cmd) {
+				urns := uniqueAccountURNs(groups)
+				resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
+			}
+			return writeOutputWithResolved(cmd, groups, resolved, func() string {
 				var b strings.Builder
 				b.WriteString("ID         NAME                STATUS    ACCOUNT\n")
 				for _, g := range groups {
@@ -82,4 +88,22 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 			})
 		},
 	}
+}
+
+// uniqueAccountURNs collects deduplicated, non-empty Account URNs from a
+// campaign-groups slice — used to feed Resolver.ResolveAll.
+func uniqueAccountURNs(groups []api.CampaignGroup) []string {
+	seen := make(map[string]struct{}, len(groups))
+	out := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g.Account == "" {
+			continue
+		}
+		if _, ok := seen[g.Account]; ok {
+			continue
+		}
+		seen[g.Account] = struct{}{}
+		out = append(out, g.Account)
+	}
+	return out
 }

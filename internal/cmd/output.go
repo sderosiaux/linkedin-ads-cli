@@ -28,19 +28,56 @@ func writeOutput(cmd *cobra.Command, data any, terminalFn func() string, compact
 		if compactFlag && len(compact) > 0 && compact[0] != nil {
 			data = applyCompact(data, compact[0])
 		}
-		b, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), string(b)); err != nil {
-			return err
-		}
-		return nil
+		return writeJSON(cmd, data)
 	}
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), terminalFn()); err != nil {
 		return err
 	}
 	return nil
+}
+
+// writeOutputWithResolved is writeOutput plus an optional URN→name map. When
+// --json is set and resolved is non-empty, the output is wrapped as
+// {"data": <data>, "_resolved": <map>}; otherwise the helper degrades to
+// writeOutput. The terminal renderer is unchanged either way.
+func writeOutputWithResolved(cmd *cobra.Command, data any, resolved map[string]string, terminalFn func() string) error {
+	if len(resolved) == 0 {
+		return writeOutput(cmd, data, terminalFn)
+	}
+	jsonFlag, _ := cmd.Root().PersistentFlags().GetBool("json")
+	if !jsonFlag {
+		// In terminal mode, the resolved map only matters when wired into the
+		// terminal renderer itself. This helper deliberately stays out of that.
+		if _, err := fmt.Fprint(cmd.OutOrStdout(), terminalFn()); err != nil {
+			return err
+		}
+		return nil
+	}
+	envelope := map[string]any{
+		"data":      applyLimit(cmd, data),
+		"_resolved": resolved,
+	}
+	return writeJSON(cmd, envelope)
+}
+
+// writeJSON marshals data as indented JSON and writes it to the command's
+// stdout. Extracted so writeOutput and writeOutputWithResolved can share the
+// same encoding path.
+func writeJSON(cmd *cobra.Command, data any) error {
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), string(b)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// resolveFlag returns the value of the global --resolve flag.
+func resolveFlag(cmd *cobra.Command) bool {
+	b, _ := cmd.Root().PersistentFlags().GetBool("resolve")
+	return b
 }
 
 // limitFlag returns the value of the global --limit flag (0 when unset).
