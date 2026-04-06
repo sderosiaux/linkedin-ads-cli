@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -94,6 +95,105 @@ func TestListCampaigns_WithGroup(t *testing.T) {
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
 	if _, err := ListCampaigns(context.Background(), c, "12345", "99", 0); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCreateCampaign(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("X-LinkedIn-Id", "777")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	in := &CreateCampaignInput{
+		Account:       "urn:li:sponsoredAccount:12345",
+		CampaignGroup: "urn:li:sponsoredCampaignGroup:678",
+		Name:          "Spring 2026",
+		Type:          "SPONSORED_UPDATES",
+		ObjectiveType: "BRAND_AWARENESS",
+		Locale:        &Locale{Country: "US", Language: "en"},
+		DailyBudget:   &Money{CurrencyCode: "USD", Amount: "100"},
+	}
+	id, err := CreateCampaign(context.Background(), c, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "777" {
+		t.Errorf("id: %q", id)
+	}
+	if gotMethod != http.MethodPost || gotPath != "/adCampaigns" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
+	}
+	if gotBody["account"] != "urn:li:sponsoredAccount:12345" {
+		t.Errorf("body account: %+v", gotBody)
+	}
+	if gotBody["campaignGroup"] != "urn:li:sponsoredCampaignGroup:678" {
+		t.Errorf("body campaignGroup: %+v", gotBody)
+	}
+	if gotBody["status"] != "DRAFT" {
+		t.Errorf("body status: %+v", gotBody)
+	}
+	if gotBody["costType"] != "CPM" {
+		t.Errorf("body costType (default CPM): %+v", gotBody)
+	}
+	if gotBody["objectiveType"] != "BRAND_AWARENESS" {
+		t.Errorf("body objectiveType: %+v", gotBody)
+	}
+}
+
+func TestUpdateCampaignOnlyStatus(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath, gotRestliMethod string
+	var gotBodyRaw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotRestliMethod = r.Header.Get("X-RestLi-Method")
+		gotBodyRaw, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	status := "ACTIVE"
+	if err := UpdateCampaign(context.Background(), c, "10", &UpdateCampaignInput{Status: &status}); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPost || gotPath != "/adCampaigns/10" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
+	}
+	if gotRestliMethod != "PARTIAL_UPDATE" {
+		t.Errorf("X-RestLi-Method: %q", gotRestliMethod)
+	}
+	expected := `{"patch":{"$set":{"status":"ACTIVE"}}}`
+	if strings.TrimSpace(string(gotBodyRaw)) != expected {
+		t.Errorf("body:\n got: %s\nwant: %s", string(gotBodyRaw), expected)
+	}
+}
+
+func TestDeleteCampaign(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	if err := DeleteCampaign(context.Background(), c, "10"); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodDelete || gotPath != "/adCampaigns/10" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 }
 

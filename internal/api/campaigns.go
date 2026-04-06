@@ -56,3 +56,55 @@ func GetCampaign(ctx context.Context, c *client.Client, id string) (*Campaign, e
 	}
 	return &camp, nil
 }
+
+// CreateCampaignInput is the request body for POST /adCampaigns. Account and
+// CampaignGroup must be full URNs.
+type CreateCampaignInput struct {
+	Account       string     `json:"account"`
+	CampaignGroup string     `json:"campaignGroup"`
+	Name          string     `json:"name"`
+	Status        string     `json:"status"`
+	Type          string     `json:"type"`
+	ObjectiveType string     `json:"objectiveType"`
+	CostType      string     `json:"costType"`
+	Locale        *Locale    `json:"locale,omitempty"`
+	DailyBudget   *Money     `json:"dailyBudget,omitempty"`
+	TotalBudget   *Money     `json:"totalBudget,omitempty"`
+	UnitCost      *Money     `json:"unitCost,omitempty"`
+	RunSchedule   *DateRange `json:"runSchedule,omitempty"`
+}
+
+// CreateCampaign creates a new campaign and returns the new id. Status defaults
+// to DRAFT and CostType to CPM when unset.
+func CreateCampaign(ctx context.Context, c *client.Client, in *CreateCampaignInput) (string, error) {
+	if in.Status == "" {
+		in.Status = "DRAFT"
+	}
+	if in.CostType == "" {
+		in.CostType = "CPM"
+	}
+	return c.PostJSON(ctx, "/adCampaigns", in, nil)
+}
+
+// UpdateCampaignInput is the partial-update body for a campaign. Only Status,
+// Name, DailyBudget and UnitCost (bid) can be touched via this CLI.
+type UpdateCampaignInput struct {
+	Status      *string `json:"status,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	DailyBudget *Money  `json:"dailyBudget,omitempty"`
+	UnitCost    *Money  `json:"unitCost,omitempty"`
+}
+
+// UpdateCampaign applies a partial update to a campaign via the Rest.li
+// PARTIAL_UPDATE protocol.
+func UpdateCampaign(ctx context.Context, c *client.Client, id string, in *UpdateCampaignInput) error {
+	body := map[string]any{
+		"patch": map[string]any{"$set": in},
+	}
+	return c.PartialUpdate(ctx, "/adCampaigns/"+id, body)
+}
+
+// DeleteCampaign deletes a campaign by id.
+func DeleteCampaign(ctx context.Context, c *client.Client, id string) error {
+	return c.Delete(ctx, "/adCampaigns/"+id)
+}

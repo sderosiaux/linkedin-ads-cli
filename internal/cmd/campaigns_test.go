@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -131,6 +132,185 @@ func TestCampaignsList_ResolveJSON(t *testing.T) {
 	}
 	if resolved["urn:li:sponsoredCampaignGroup:111"] != "Q1 Push" {
 		t.Errorf("expected resolved name 'Q1 Push', got: %v", resolved)
+	}
+}
+
+func TestCampaignsCreate_DryRun(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call HTTP, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--dry-run",
+		"campaigns", "create",
+		"--group", "678", "--name", "Spring",
+		"--daily-budget", "100", "--currency", "USD",
+		"--objective", "BRAND_AWARENESS", "--type", "SPONSORED_UPDATES",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "POST /adCampaigns") {
+		t.Errorf("expected POST summary in dry-run output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), `"campaignGroup": "urn:li:sponsoredCampaignGroup:678"`) {
+		t.Errorf("expected group URN in payload: %s", out.String())
+	}
+	if !strings.Contains(out.String(), `"name": "Spring"`) {
+		t.Errorf("expected name in payload: %s", out.String())
+	}
+}
+
+func TestCampaignsCreate_YesPath(t *testing.T) {
+	var gotMethod, gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("X-LinkedIn-Id", "888")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaigns", "create",
+		"--group", "678", "--name", "Spring",
+		"--daily-budget", "100", "--currency", "USD",
+		"--objective", "BRAND_AWARENESS", "--type", "SPONSORED_UPDATES",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if gotMethod != http.MethodPost || gotPath != "/adCampaigns" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
+	}
+	if gotBody["status"] != "DRAFT" || gotBody["costType"] != "CPM" {
+		t.Errorf("body defaults: %+v", gotBody)
+	}
+	if !strings.Contains(out.String(), "Created campaign 888") {
+		t.Errorf("expected success line, got: %s", out.String())
+	}
+}
+
+func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
+	var gotMethod, gotPath, gotRestliMethod string
+	var gotBodyRaw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotRestliMethod = r.Header.Get("X-RestLi-Method")
+		gotBodyRaw, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaigns", "update", "10", "--status", "ACTIVE",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if gotMethod != http.MethodPost || gotPath != "/adCampaigns/10" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
+	}
+	if gotRestliMethod != "PARTIAL_UPDATE" {
+		t.Errorf("X-RestLi-Method: %q", gotRestliMethod)
+	}
+	expected := `{"patch":{"$set":{"status":"ACTIVE"}}}`
+	if strings.TrimSpace(string(gotBodyRaw)) != expected {
+		t.Errorf("body:\n got: %s\nwant: %s", string(gotBodyRaw), expected)
+	}
+}
+
+func TestCampaignsDelete_YesPath(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--yes", "campaigns", "delete", "10"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if gotMethod != http.MethodDelete || gotPath != "/adCampaigns/10" {
+		t.Errorf("got %s %s", gotMethod, gotPath)
+	}
+}
+
+func TestCampaignsDelete_DryRun(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call HTTP, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--dry-run", "campaigns", "delete", "10"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "DELETE /adCampaigns/10") {
+		t.Errorf("expected summary in dry-run output: %s", out.String())
 	}
 }
 
