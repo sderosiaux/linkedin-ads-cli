@@ -265,6 +265,32 @@ func TestAnalyticsReach_JSON(t *testing.T) {
 	}
 }
 
+func TestAnalyticsReach_92DayLimit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "reach",
+		"--campaign", "42",
+		"--start", "2026-01-01", "--end", "2026-06-01",
+	})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error for >92 day range")
+	}
+	if !strings.Contains(err.Error(), "92 days") {
+		t.Errorf("expected 92-day hint, got: %v", err)
+	}
+}
+
 func TestAnalyticsDailyTrends_AccountDefault(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery

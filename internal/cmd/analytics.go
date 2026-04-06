@@ -227,6 +227,9 @@ func newAnalyticsReachCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if end.Sub(start) > 92*24*time.Hour {
+				return errors.New("reach queries are limited to 92 days")
+			}
 			rows, err := api.GetSingleCampaignAnalytics(cmd.Context(), c, campaignID, start, end)
 			if err != nil {
 				return err
