@@ -6,10 +6,62 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/confirm"
 	"github.com/spf13/cobra"
 )
+
+// fieldDiff captures a single human-readable field change for an update diff.
+type fieldDiff struct {
+	name string
+	old  string
+	new  string
+}
+
+// formatMoneyValue renders a Money pointer as "<amount> <currency>", or
+// "(unset)" when the pointer is nil. Used to compare current and proposed
+// budgets/bids in update diffs.
+func formatMoneyValue(m *api.Money) string {
+	if m == nil {
+		return "(unset)"
+	}
+	return fmt.Sprintf("%s %s", m.Amount, m.CurrencyCode)
+}
+
+// formatEpochMillisDate renders a LinkedIn epoch-millis timestamp as YYYY-MM-DD
+// in UTC. Returns "(unset)" for zero values.
+func formatEpochMillisDate(ms int64) string {
+	if ms == 0 {
+		return "(unset)"
+	}
+	return time.UnixMilli(ms).UTC().Format(dateLayout)
+}
+
+// dateRangeBounds returns the formatted start/end strings for a DateRange,
+// or "(unset)" placeholders when the range or its bounds are missing.
+func dateRangeBounds(r *api.DateRange) (string, string) {
+	if r == nil {
+		return "(unset)", "(unset)"
+	}
+	return formatEpochMillisDate(r.Start), formatEpochMillisDate(r.End)
+}
+
+// printDiff renders a header and a list of "  <field>: <old>  →  <new>" lines
+// to stdout. Used by update commands to preview changes before sending the
+// partial update.
+func printDiff(cmd *cobra.Command, header string, diffs []fieldDiff) error {
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), header); err != nil {
+		return err
+	}
+	for _, d := range diffs {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s  →  %s\n", d.name, d.old, d.new); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // newCorrelationID returns a fresh RFC 4122 v4 UUID. Used as a CLI-side
 // breadcrumb so users can grep their LinkedIn activity log against the

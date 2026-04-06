@@ -303,6 +303,10 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 	var gotMethod, gotPath, gotRestliMethod string
 	var gotBodyRaw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/111" {
+			_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotRestliMethod = r.Header.Get("X-RestLi-Method")
@@ -341,9 +345,93 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 	}
 }
 
-func TestCampaignGroupsUpdate_DryRun(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call HTTP, got %s %s", r.Method, r.URL.Path)
+func TestCampaignGroupsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
+	var gotPatch bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/12345" {
+			_, _ = w.Write([]byte(`{"id":12345,"name":"Q2 Brand","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/adCampaignGroups/12345" {
+			gotPatch = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaign-groups", "update", "12345", "--status", "PAUSED",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !gotPatch {
+		t.Errorf("expected PATCH call")
+	}
+	if !strings.Contains(out.String(), "status: ACTIVE  →  PAUSED") {
+		t.Errorf("expected status diff line, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "Updating campaign group 12345") {
+		t.Errorf("expected diff header, got: %s", out.String())
+	}
+}
+
+func TestCampaignGroupsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/12345" {
+			_, _ = w.Write([]byte(`{"id":12345,"name":"Q2","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
+		if r.Method == http.MethodPost {
+			t.Fatalf("PATCH should not be sent when nothing changed, got %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaign-groups", "update", "12345", "--status", "ACTIVE",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "No changes.") {
+		t.Errorf("expected 'No changes.', got: %s", out.String())
+	}
+}
+
+func TestCampaignGroupsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/111" {
+			_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
+		t.Fatalf("dry-run should not write, got %s %s", r.Method, r.URL.Path)
 	}))
 	defer srv.Close()
 	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
@@ -367,6 +455,12 @@ func TestCampaignGroupsUpdate_DryRun(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "POST /adCampaignGroups/111") {
 		t.Errorf("expected summary in dry-run output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "status: PAUSED  →  ACTIVE") {
+		t.Errorf("expected diff in dry-run output: %s", out.String())
+	}
+	if strings.Contains(out.String(), "correlation-id") {
+		t.Errorf("dry-run should not emit correlation-id, got: %s", out.String())
 	}
 }
 

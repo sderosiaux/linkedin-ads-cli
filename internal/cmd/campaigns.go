@@ -210,34 +210,69 @@ func newCampaignsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			in := &api.UpdateCampaignInput{}
-			if cmd.Flags().Changed("name") {
-				in.Name = &name
+			id := args[0]
+			current, err := api.GetCampaign(cmd.Context(), c, id)
+			if err != nil {
+				return err
 			}
-			if cmd.Flags().Changed("status") {
-				in.Status = &status
+
+			in := &api.UpdateCampaignInput{}
+			diffs := []fieldDiff{}
+
+			if cmd.Flags().Changed("status") && status != current.Status {
+				s := status
+				in.Status = &s
+				diffs = append(diffs, fieldDiff{"status", current.Status, status})
+			}
+			if cmd.Flags().Changed("name") && name != current.Name {
+				n := name
+				in.Name = &n
+				diffs = append(diffs, fieldDiff{"name", current.Name, name})
 			}
 			if cmd.Flags().Changed("daily-budget") {
-				in.DailyBudget = &api.Money{
+				newMoney := &api.Money{
 					CurrencyCode: currency,
 					Amount:       strconv.FormatInt(dailyBudget, 10),
 				}
+				oldStr := formatMoneyValue(current.DailyBudget)
+				newStr := formatMoneyValue(newMoney)
+				if oldStr != newStr {
+					in.DailyBudget = newMoney
+					diffs = append(diffs, fieldDiff{"dailyBudget", oldStr, newStr})
+				}
 			}
 			if cmd.Flags().Changed("bid") {
-				in.UnitCost = &api.Money{
+				newMoney := &api.Money{
 					CurrencyCode: currency,
 					Amount:       strconv.FormatInt(bid, 10),
 				}
+				oldStr := formatMoneyValue(current.UnitCost)
+				newStr := formatMoneyValue(newMoney)
+				if oldStr != newStr {
+					in.UnitCost = newMoney
+					diffs = append(diffs, fieldDiff{"bid", oldStr, newStr})
+				}
 			}
+
+			if len(diffs) == 0 {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes.")
+				return err
+			}
+
+			header := fmt.Sprintf("Updating campaign %s (%s)", id, current.Name)
+			if err := printDiff(cmd, header, diffs); err != nil {
+				return err
+			}
+
 			payload := map[string]any{
 				"patch": map[string]any{"$set": in},
 			}
-			summary := "POST /adCampaigns/" + args[0]
+			summary := "POST /adCampaigns/" + id
 			return executeWrite(cmd, summary, payload, func() error {
-				if err := api.UpdateCampaign(cmd.Context(), c, args[0], in); err != nil {
+				if err := api.UpdateCampaign(cmd.Context(), c, id, in); err != nil {
 					return err
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Updated campaign %s\n", args[0])
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "✓ Updated.")
 				return err
 			})
 		},

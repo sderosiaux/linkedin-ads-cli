@@ -313,6 +313,10 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 	var gotMethod, gotPath, gotRestliMethod string
 	var gotBodyRaw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
+			return
+		}
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotRestliMethod = r.Header.Get("X-RestLi-Method")
@@ -348,6 +352,135 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 	expected := `{"patch":{"$set":{"status":"ACTIVE"}}}`
 	if strings.TrimSpace(string(gotBodyRaw)) != expected {
 		t.Errorf("body:\n got: %s\nwant: %s", string(gotBodyRaw), expected)
+	}
+}
+
+func TestCampaignsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
+	var gotPatch bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+			_, _ = w.Write([]byte(`{"id":10,"name":"Old Name","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC","dailyBudget":{"amount":"50","currencyCode":"USD"}}`))
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/adCampaigns/10" {
+			gotPatch = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaigns", "update", "10",
+		"--status", "PAUSED",
+		"--name", "New Name",
+		"--daily-budget", "100", "--currency", "USD",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !gotPatch {
+		t.Errorf("expected PATCH call")
+	}
+	s := out.String()
+	if !strings.Contains(s, "status: ACTIVE  →  PAUSED") {
+		t.Errorf("expected status diff line, got: %s", s)
+	}
+	if !strings.Contains(s, "name: Old Name  →  New Name") {
+		t.Errorf("expected name diff line, got: %s", s)
+	}
+	if !strings.Contains(s, "dailyBudget: 50 USD  →  100 USD") {
+		t.Errorf("expected dailyBudget diff line, got: %s", s)
+	}
+	if !strings.Contains(s, "Updating campaign 10") {
+		t.Errorf("expected diff header, got: %s", s)
+	}
+}
+
+func TestCampaignsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
+			return
+		}
+		if r.Method == http.MethodPost {
+			t.Fatalf("PATCH should not be sent when nothing changed, got %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--yes",
+		"campaigns", "update", "10", "--status", "ACTIVE",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "No changes.") {
+		t.Errorf("expected 'No changes.', got: %s", out.String())
+	}
+}
+
+func TestCampaignsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
+			return
+		}
+		t.Fatalf("dry-run should not write, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--dry-run",
+		"campaigns", "update", "10", "--status", "ACTIVE",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "POST /adCampaigns/10") {
+		t.Errorf("expected summary in dry-run output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "status: PAUSED  →  ACTIVE") {
+		t.Errorf("expected diff in dry-run output: %s", out.String())
+	}
+	if strings.Contains(out.String(), "correlation-id") {
+		t.Errorf("dry-run should not emit correlation-id, got: %s", out.String())
 	}
 }
 

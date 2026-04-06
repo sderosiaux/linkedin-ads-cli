@@ -12,13 +12,26 @@ import (
 )
 
 // TestDryRun_NoHTTPCalls is the cross-cutting safety net for --dry-run.
-// Every write subcommand must short-circuit before any HTTP request, no
-// matter what its individual unit tests check. We hand them a server whose
-// handler t.Fatal()s on contact and assert each command still produces a
-// human-readable preview.
+// Every write subcommand must short-circuit before any write HTTP request, no
+// matter what its individual unit tests check. We hand them a server that
+// allows GETs (update commands need to fetch the current state to render a
+// diff) and t.Fatal()s on any other method, then assert each command still
+// produces a human-readable preview.
 func TestDryRun_NoHTTPCalls(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should make no HTTP calls, but received %s %s", r.Method, r.URL.Path)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			switch r.URL.Path {
+			case "/adCampaignGroups/111":
+				_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:12345"}`))
+			case "/adCampaigns/10":
+				_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:12345","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
+			default:
+				t.Errorf("unexpected GET %s", r.URL.Path)
+				w.WriteHeader(http.StatusNotFound)
+			}
+			return
+		}
+		t.Fatalf("dry-run should make no write HTTP calls, but received %s %s", r.Method, r.URL.Path)
 	}))
 	defer srv.Close()
 	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)

@@ -194,17 +194,35 @@ func newCampaignGroupsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			in := &api.UpdateCampaignGroupInput{}
-			if cmd.Flags().Changed("name") {
-				in.Name = &name
+			id := args[0]
+			current, err := api.GetCampaignGroup(cmd.Context(), c, id)
+			if err != nil {
+				return err
 			}
-			if cmd.Flags().Changed("status") {
-				in.Status = &status
+
+			in := &api.UpdateCampaignGroupInput{}
+			diffs := []fieldDiff{}
+
+			if cmd.Flags().Changed("status") && status != current.Status {
+				s := status
+				in.Status = &s
+				diffs = append(diffs, fieldDiff{"status", current.Status, status})
+			}
+			if cmd.Flags().Changed("name") && name != current.Name {
+				n := name
+				in.Name = &n
+				diffs = append(diffs, fieldDiff{"name", current.Name, name})
 			}
 			if cmd.Flags().Changed("total-budget") {
-				in.TotalBudget = &api.Money{
+				newMoney := &api.Money{
 					CurrencyCode: currency,
 					Amount:       strconv.FormatInt(totalBudget, 10),
+				}
+				oldStr := formatMoneyValue(current.TotalBudget)
+				newStr := formatMoneyValue(newMoney)
+				if oldStr != newStr {
+					in.TotalBudget = newMoney
+					diffs = append(diffs, fieldDiff{"totalBudget", oldStr, newStr})
 				}
 			}
 			if startStr != "" || endStr != "" {
@@ -212,17 +230,42 @@ func newCampaignGroupsUpdateCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				in.RunSchedule = rs
+				oldStart, oldEnd := dateRangeBounds(current.RunSchedule)
+				newStart := formatEpochMillisDate(rs.Start)
+				newEnd := formatEpochMillisDate(rs.End)
+				changed := false
+				if startStr != "" && newStart != oldStart {
+					diffs = append(diffs, fieldDiff{"start", oldStart, newStart})
+					changed = true
+				}
+				if endStr != "" && newEnd != oldEnd {
+					diffs = append(diffs, fieldDiff{"end", oldEnd, newEnd})
+					changed = true
+				}
+				if changed {
+					in.RunSchedule = rs
+				}
 			}
+
+			if len(diffs) == 0 {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes.")
+				return err
+			}
+
+			header := fmt.Sprintf("Updating campaign group %s (%s)", id, current.Name)
+			if err := printDiff(cmd, header, diffs); err != nil {
+				return err
+			}
+
 			payload := map[string]any{
 				"patch": map[string]any{"$set": in},
 			}
-			summary := "POST /adCampaignGroups/" + args[0]
+			summary := "POST /adCampaignGroups/" + id
 			return executeWrite(cmd, summary, payload, func() error {
-				if err := api.UpdateCampaignGroup(cmd.Context(), c, args[0], in); err != nil {
+				if err := api.UpdateCampaignGroup(cmd.Context(), c, id, in); err != nil {
 					return err
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Updated campaign group %s\n", args[0])
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "✓ Updated.")
 				return err
 			})
 		},
