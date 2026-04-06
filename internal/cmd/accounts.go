@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -29,7 +28,7 @@ func newAccountsListCmd() *cobra.Command {
 				return err
 			}
 			limit := limitFlag(cmd)
-			accts, err := api.ListAccounts(context.Background(), c, limit)
+			accts, err := api.ListAccounts(cmd.Context(), c, limit)
 			if err != nil {
 				return err
 			}
@@ -56,7 +55,7 @@ func newAccountsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			acct, err := api.GetAccount(context.Background(), c, args[0])
+			acct, err := api.GetAccount(cmd.Context(), c, args[0])
 			if err != nil {
 				return err
 			}

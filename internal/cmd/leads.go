@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -41,7 +40,7 @@ func newLeadsFormsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			forms, err := api.ListLeadForms(context.Background(), c, accountID, limitFlag(cmd))
+			forms, err := api.ListLeadForms(cmd.Context(), c, accountID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}

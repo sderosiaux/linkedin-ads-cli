@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -32,7 +31,7 @@ func newAudiencesListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			auds, err := api.ListAudiences(context.Background(), c, accountID, limitFlag(cmd))
+			auds, err := api.ListAudiences(cmd.Context(), c, accountID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}

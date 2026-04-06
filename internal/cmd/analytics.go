@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -103,7 +102,7 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := api.GetCampaignAnalytics(context.Background(), c, accountID, start, end, gran)
+			rows, err := api.GetCampaignAnalytics(cmd.Context(), c, accountID, start, end, gran)
 			if err != nil {
 				return err
 			}
@@ -150,7 +149,7 @@ func newAnalyticsCreativesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := api.GetCreativeAnalytics(context.Background(), c, campaignID, start, end, gran)
+			rows, err := api.GetCreativeAnalytics(cmd.Context(), c, campaignID, start, end, gran)
 			if err != nil {
 				return err
 			}
@@ -187,7 +186,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := api.GetDemographicsAnalytics(context.Background(), c, campaignID, pivot, start, end)
+			rows, err := api.GetDemographicsAnalytics(cmd.Context(), c, campaignID, pivot, start, end)
 			if err != nil {
 				return err
 			}
@@ -219,7 +218,7 @@ func newAnalyticsReachCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := api.GetSingleCampaignAnalytics(context.Background(), c, campaignID, start, end)
+			rows, err := api.GetSingleCampaignAnalytics(cmd.Context(), c, campaignID, start, end)
 			if err != nil {
 				return err
 			}
@@ -262,7 +261,7 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := api.GetDailyTrendsAnalytics(context.Background(), c, accountID, campaignID, start, end)
+			rows, err := api.GetDailyTrendsAnalytics(cmd.Context(), c, accountID, campaignID, start, end)
 			if err != nil {
 				return err
 			}
@@ -311,7 +310,7 @@ func newAnalyticsCompareCmd() *cobra.Command {
 			end := time.Now().UTC()
 			start := end.AddDate(0, 0, -30)
 
-			ctx := context.Background()
+			ctx := cmd.Context()
 			var (
 				rowsA, rowsB []api.AnalyticsRow
 				errA, errB   error

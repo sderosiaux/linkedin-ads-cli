@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -64,7 +63,7 @@ func runOverview(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	acct, err := api.GetAccount(ctx, c, accountID)
 	if err != nil {
 		return fmt.Errorf("get account: %w", err)

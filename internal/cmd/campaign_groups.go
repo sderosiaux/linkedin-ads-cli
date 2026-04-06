@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -43,7 +42,7 @@ func newCampaignGroupsListCmd() *cobra.Command {
 				return err
 			}
 			statusFilter, _ := cmd.Flags().GetString("status")
-			groups, err := api.ListCampaignGroups(context.Background(), c, accountID, limitFlag(cmd))
+			groups, err := api.ListCampaignGroups(cmd.Context(), c, accountID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -89,7 +88,7 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			g, err := api.GetCampaignGroup(context.Background(), c, args[0])
+			g, err := api.GetCampaignGroup(cmd.Context(), c, args[0])
 			if err != nil {
 				return err
 			}

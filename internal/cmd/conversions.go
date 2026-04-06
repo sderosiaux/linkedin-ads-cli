@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -32,7 +31,7 @@ func newConversionsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			convs, err := api.ListConversions(context.Background(), c, accountID, limitFlag(cmd))
+			convs, err := api.ListConversions(cmd.Context(), c, accountID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}

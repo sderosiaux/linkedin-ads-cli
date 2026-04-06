@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,7 +32,7 @@ func newCreativesListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			creatives, err := api.ListCreatives(context.Background(), c, campaignID, limitFlag(cmd))
+			creatives, err := api.ListCreatives(cmd.Context(), c, campaignID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -62,7 +61,7 @@ func newCreativesGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cr, err := api.GetCreative(context.Background(), c, args[0])
+			cr, err := api.GetCreative(cmd.Context(), c, args[0])
 			if err != nil {
 				return err
 			}
