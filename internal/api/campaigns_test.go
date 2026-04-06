@@ -18,16 +18,16 @@ func TestListCampaigns_AccountOnly(t *testing.T) {
 		if r.URL.Path != "/adCampaigns" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		q := r.URL.Query()
-		if q.Get("q") != "search" {
-			t.Errorf("q: %q", q.Get("q"))
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "q=search") {
+			t.Errorf("RawQuery missing q=search: %q", raw)
 		}
-		search := q.Get("search")
-		if !strings.Contains(search, "urn:li:sponsoredAccount:12345") {
-			t.Errorf("search missing account: %q", search)
+		wantTuple := "search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
+		if !strings.Contains(raw, wantTuple) {
+			t.Errorf("RawQuery missing unescaped tuple %q: %q", wantTuple, raw)
 		}
-		if strings.Contains(search, "campaignGroup") {
-			t.Errorf("search should NOT contain campaignGroup when no group passed: %q", search)
+		if strings.Contains(raw, "campaignGroup") {
+			t.Errorf("RawQuery should NOT contain campaignGroup when no group passed: %q", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
@@ -78,12 +78,14 @@ func TestListCampaigns_AccountOnly(t *testing.T) {
 func TestListCampaigns_WithGroup(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		search := r.URL.Query().Get("search")
-		if !strings.Contains(search, "urn:li:sponsoredAccount:12345") {
-			t.Errorf("search missing account: %q", search)
+		raw := r.URL.RawQuery
+		wantAccount := "account:(values:List(urn:li:sponsoredAccount:12345))"
+		wantGroup := "campaignGroup:(values:List(urn:li:sponsoredCampaignGroup:99))"
+		if !strings.Contains(raw, wantAccount) {
+			t.Errorf("RawQuery missing account clause %q: %q", wantAccount, raw)
 		}
-		if !strings.Contains(search, "urn:li:sponsoredCampaignGroup:99") {
-			t.Errorf("search missing group: %q", search)
+		if !strings.Contains(raw, wantGroup) {
+			t.Errorf("RawQuery missing group clause %q: %q", wantGroup, raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{},

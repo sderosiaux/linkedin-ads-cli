@@ -17,13 +17,13 @@ func TestListCreatives(t *testing.T) {
 		if r.URL.Path != "/adCreatives" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		q := r.URL.Query()
-		if q.Get("q") != "criteria" {
-			t.Errorf("q: %q", q.Get("q"))
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "q=criteria") {
+			t.Errorf("RawQuery missing q=criteria: %q", raw)
 		}
-		// Query.Get decodes percent-encoded parens transparently.
-		if !strings.Contains(q.Get("campaigns"), "urn:li:sponsoredCampaign:42") {
-			t.Errorf("campaigns missing urn: %q", q.Get("campaigns"))
+		wantTuple := "campaigns=List(urn:li:sponsoredCampaign:42)"
+		if !strings.Contains(raw, wantTuple) {
+			t.Errorf("RawQuery missing unescaped tuple %q: %q", wantTuple, raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{

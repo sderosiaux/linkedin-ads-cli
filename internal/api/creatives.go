@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"net/url"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
@@ -25,11 +24,9 @@ type Creative struct {
 // If limit > 0, iteration stops after limit items.
 func ListCreatives(ctx context.Context, c *client.Client, campaignID string, limit int) ([]Creative, error) {
 	campURN := urn.Wrap(urn.Campaign, campaignID)
-	q := url.Values{}
-	q.Set("q", "criteria")
-	q.Set("campaigns", fmt.Sprintf("List(%s)", campURN))
+	rawQuery := fmt.Sprintf("q=criteria&campaigns=List(%s)", campURN)
 	var out []Creative
-	if err := client.PaginateStartCount(ctx, c, "/adCreatives", q, 500, limit, &out); err != nil {
+	if err := client.PaginateStartCountRaw(ctx, c, "/adCreatives", rawQuery, 500, limit, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

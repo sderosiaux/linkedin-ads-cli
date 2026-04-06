@@ -18,16 +18,13 @@ func TestListCampaignGroups(t *testing.T) {
 		if r.URL.Path != "/adCampaignGroups" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		q := r.URL.Query()
-		if q.Get("q") != "search" {
-			t.Errorf("q: %q", q.Get("q"))
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "q=search") {
+			t.Errorf("RawQuery missing q=search: %q", raw)
 		}
-		search := q.Get("search")
-		if !strings.Contains(search, "urn:li:sponsoredAccount:12345") {
-			t.Errorf("search missing account urn: %q", search)
-		}
-		if !strings.HasPrefix(search, "(account:(values:List(") {
-			t.Errorf("search shape: %q", search)
+		wantTuple := "search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
+		if !strings.Contains(raw, wantTuple) {
+			t.Errorf("RawQuery missing unescaped tuple %q: %q", wantTuple, raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{

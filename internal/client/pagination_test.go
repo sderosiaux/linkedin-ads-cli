@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -60,6 +61,34 @@ func TestPaginateStartCount_HonorsLimit(t *testing.T) {
 	}
 	if len(all) != 3 {
 		t.Fatalf("expected 3 items (limit), got %d", len(all))
+	}
+}
+
+func TestPaginateStartCountRaw_PreservesTupleSyntax(t *testing.T) {
+	t.Parallel()
+	wantTuple := "search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, wantTuple) {
+			t.Errorf("RawQuery missing unescaped tuple: got %q want substring %q", r.URL.RawQuery, wantTuple)
+		}
+		if !strings.Contains(r.URL.RawQuery, "start=0") || !strings.Contains(r.URL.RawQuery, "count=2") {
+			t.Errorf("RawQuery missing pagination cursor: %q", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{{"id": 1}},
+			"paging":   map[string]any{"start": 0, "count": 2, "total": 1},
+		})
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	rawQuery := "q=search&search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
+	var all []map[string]any
+	if err := PaginateStartCountRaw(context.Background(), c, "/items", rawQuery, 2, 0, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(all))
 	}
 }
 

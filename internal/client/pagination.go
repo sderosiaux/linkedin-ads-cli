@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strconv"
 )
@@ -37,6 +38,52 @@ func PaginateStartCount(ctx context.Context, c *Client, path string, q url.Value
 
 		var page pagedResponse
 		if err := c.GetJSON(ctx, path, q, &page); err != nil {
+			return err
+		}
+		var raws []json.RawMessage
+		if len(page.Elements) > 0 {
+			if err := json.Unmarshal(page.Elements, &raws); err != nil {
+				return err
+			}
+		}
+		accumulated = append(accumulated, raws...)
+
+		if limit > 0 && len(accumulated) >= limit {
+			accumulated = accumulated[:limit]
+			break
+		}
+		if len(raws) < pageSize {
+			break
+		}
+		if page.Paging.Total > 0 && start+pageSize >= page.Paging.Total {
+			break
+		}
+		start += pageSize
+	}
+
+	b, err := json.Marshal(accumulated)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, dst)
+}
+
+// PaginateStartCountRaw is like PaginateStartCount but accepts a raw query
+// string instead of url.Values. Callers who build Rest.li finder clauses that
+// contain parentheses or colons must use this to avoid percent-encoding them.
+// The pagination cursor (start/count) is appended to the raw query by the
+// iterator. pageSize defaults to 500 when non-positive.
+func PaginateStartCountRaw(ctx context.Context, c *Client, path, rawQuery string, pageSize, limit int, dst any) error {
+	if pageSize <= 0 {
+		pageSize = 500
+	}
+	start := 0
+	var accumulated []json.RawMessage
+	for {
+		fullRawQuery := fmt.Sprintf("%s&start=%d&count=%d", rawQuery, start, pageSize)
+
+		var page pagedResponse
+		if err := c.GetJSONRawQuery(ctx, path, fullRawQuery, &page); err != nil {
 			return err
 		}
 		var raws []json.RawMessage

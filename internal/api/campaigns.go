@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
@@ -31,18 +31,14 @@ type Campaign struct {
 // If limit > 0, iteration stops after limit items.
 func ListCampaigns(ctx context.Context, c *client.Client, accountID, groupID string, limit int) ([]Campaign, error) {
 	accountURN := urn.Wrap(urn.Account, accountID)
-	search := fmt.Sprintf("(account:(values:List(%s))", accountURN)
+	clauses := []string{fmt.Sprintf("account:(values:List(%s))", accountURN)}
 	if groupID != "" {
 		groupURN := urn.Wrap(urn.CampaignGroup, groupID)
-		search += fmt.Sprintf(",campaignGroup:(values:List(%s))", groupURN)
+		clauses = append(clauses, fmt.Sprintf("campaignGroup:(values:List(%s))", groupURN))
 	}
-	search += ")"
-
-	q := url.Values{}
-	q.Set("q", "search")
-	q.Set("search", search)
+	rawQuery := fmt.Sprintf("q=search&search=(%s)", strings.Join(clauses, ","))
 	var out []Campaign
-	if err := client.PaginateStartCount(ctx, c, "/adCampaigns", q, 500, limit, &out); err != nil {
+	if err := client.PaginateStartCountRaw(ctx, c, "/adCampaigns", rawQuery, 500, limit, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
