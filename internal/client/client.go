@@ -8,9 +8,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -24,8 +26,11 @@ type Options struct {
 	APIVersion string
 	// HTTP is an optional custom http.Client. If nil a 30s-timeout client is used.
 	HTTP *http.Client
-	// Verbose reserves a hook for request tracing (unused today).
+	// Verbose enables HTTP request tracing on Logger (defaults to stderr).
 	Verbose bool
+	// Logger is the sink for verbose request traces. nil falls back to stderr.
+	// Authorization headers are NEVER written to this writer.
+	Logger io.Writer
 }
 
 // Client is a thin LinkedIn REST client. Safe for concurrent use.
@@ -35,6 +40,7 @@ type Client struct {
 	version string
 	http    *http.Client
 	verbose bool
+	logger  io.Writer
 }
 
 // BaseURL returns the configured base URL (e.g. https://api.linkedin.com/rest).
@@ -47,13 +53,53 @@ func New(o Options) *Client {
 	if h == nil {
 		h = &http.Client{Timeout: 30 * time.Second}
 	}
+	logger := o.Logger
+	if logger == nil {
+		logger = os.Stderr
+	}
 	return &Client{
 		base:    o.BaseURL,
 		token:   o.Token,
 		version: o.APIVersion,
 		http:    h,
 		verbose: o.Verbose,
+		logger:  logger,
 	}
+}
+
+// formatBytes renders a byte count as a compact human-readable string.
+// Negative values (Content-Length unknown) collapse to "-".
+func formatBytes(n int64) string {
+	if n < 0 {
+		return "-"
+	}
+	const (
+		kb = 1024
+		mb = 1024 * 1024
+	)
+	switch {
+	case n >= mb:
+		return fmt.Sprintf("%.1fMB", float64(n)/float64(mb))
+	case n >= kb:
+		return fmt.Sprintf("%.1fKB", float64(n)/float64(kb))
+	default:
+		return fmt.Sprintf("%dB", n)
+	}
+}
+
+// logTrace writes one METHOD url (status, duration, bytes) line to the
+// configured logger. Authorization headers are deliberately never sourced or
+// written here — only method, url, status, duration, and content length.
+func (c *Client) logTrace(method, urlStr string, status int, dur time.Duration, contentLength int64, err error) {
+	if !c.verbose || c.logger == nil {
+		return
+	}
+	ms := dur.Milliseconds()
+	if err != nil {
+		_, _ = fmt.Fprintf(c.logger, "%s %s (err: %v, %dms)\n", method, urlStr, err, ms)
+		return
+	}
+	_, _ = fmt.Fprintf(c.logger, "%s %s (%d, %dms, %s)\n", method, urlStr, status, ms, formatBytes(contentLength))
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
@@ -99,10 +145,13 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, query u
 			req.Header.Set(k, v)
 		}
 
+		started := time.Now()
 		resp, err = c.http.Do(req)
 		if err != nil {
+			c.logTrace(method, u.String(), 0, time.Since(started), -1, err)
 			return nil, err
 		}
+		c.logTrace(method, u.String(), resp.StatusCode, time.Since(started), resp.ContentLength, nil)
 		if !shouldRetry(resp.StatusCode) || attempt == maxAttempts-1 {
 			return resp, nil
 		}
@@ -217,10 +266,13 @@ func (c *Client) doRaw(ctx context.Context, method, path, rawQuery string) (*htt
 		req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
 		req.Header.Set("Accept", "application/json")
 
+		started := time.Now()
 		resp, err = c.http.Do(req)
 		if err != nil {
+			c.logTrace(method, u.String(), 0, time.Since(started), -1, err)
 			return nil, err
 		}
+		c.logTrace(method, u.String(), resp.StatusCode, time.Since(started), resp.ContentLength, nil)
 		if !shouldRetry(resp.StatusCode) || attempt == maxAttempts-1 {
 			return resp, nil
 		}

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -260,6 +261,101 @@ func TestDeleteReturnsAPIErrorOn404(t *testing.T) {
 	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
 	if err := c.Delete(context.Background(), "/adCampaignGroups/x"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestVerboseTracing_NoAuthHeader(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"elements":[]}`))
+	}))
+	defer srv.Close()
+
+	var logged bytes.Buffer
+	c := New(Options{ //nolint:gosec // test fixture
+		BaseURL:    srv.URL,
+		Token:      "secret_token_xyz",
+		APIVersion: "202601",
+		Verbose:    true,
+		Logger:     &logged,
+	})
+	var out map[string]any
+	if err := c.GetJSON(context.Background(), "/foo", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	s := logged.String()
+	if !strings.Contains(s, "GET") {
+		t.Errorf("trace missing method: %q", s)
+	}
+	if !strings.Contains(s, "/foo") {
+		t.Errorf("trace missing path: %q", s)
+	}
+	if !strings.Contains(s, "200") {
+		t.Errorf("trace missing status: %q", s)
+	}
+	if !strings.Contains(s, "ms") {
+		t.Errorf("trace missing duration: %q", s)
+	}
+	if strings.Contains(s, "secret_token_xyz") {
+		t.Errorf("TOKEN LEAKED: %s", s)
+	}
+	if strings.Contains(strings.ToLower(s), "bearer") {
+		t.Errorf("bearer leaked: %s", s)
+	}
+	if strings.Contains(strings.ToLower(s), "authorization") {
+		t.Errorf("authorization header leaked: %s", s)
+	}
+}
+
+func TestVerboseTracing_RawQuery(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	var logged bytes.Buffer
+	c := New(Options{ //nolint:gosec // test fixture
+		BaseURL:    srv.URL,
+		Token:      "tok",
+		APIVersion: "202601",
+		Verbose:    true,
+		Logger:     &logged,
+	})
+	var out map[string]any
+	if err := c.GetJSONRawQuery(context.Background(), "/items", "q=search&start=0", &out); err != nil {
+		t.Fatal(err)
+	}
+	s := logged.String()
+	if !strings.Contains(s, "GET") || !strings.Contains(s, "/items") {
+		t.Errorf("missing method/path: %q", s)
+	}
+	if !strings.Contains(s, "q=search") {
+		t.Errorf("missing query: %q", s)
+	}
+}
+
+func TestVerboseTracing_DisabledByDefault(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	var logged bytes.Buffer
+	c := New(Options{ //nolint:gosec // test fixture
+		BaseURL:    srv.URL,
+		Token:      "tok",
+		APIVersion: "202601",
+		Logger:     &logged,
+	})
+	var out map[string]any
+	if err := c.GetJSON(context.Background(), "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if logged.Len() != 0 {
+		t.Errorf("expected no log when verbose=false, got: %q", logged.String())
 	}
 }
 

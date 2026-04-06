@@ -50,9 +50,12 @@ func clientFromConfig(cmd *cobra.Command) (*client.Client, *config.Config, error
 	if v := os.Getenv("LINKEDIN_ADS_BASE_URL"); v != "" {
 		base = v
 	}
+	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 	return client.New(client.Options{
 		BaseURL:    base,
 		Token:      c.Token,
 		APIVersion: apiVersion,
+		Verbose:    verbose,
+		Logger:     cmd.ErrOrStderr(),
 	}), c, nil
 }
