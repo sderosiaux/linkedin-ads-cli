@@ -14,6 +14,7 @@ func TestWrap(t *testing.T) {
 		{"campaign-group", CampaignGroup, "456", "urn:li:sponsoredCampaignGroup:456"},
 		{"campaign", Campaign, "789", "urn:li:sponsoredCampaign:789"},
 		{"creative", Creative, "101", "urn:li:sponsoredCreative:101"},
+		{"organization", Organization, "789", "urn:li:organization:789"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -116,6 +116,61 @@ func CreateCreative(ctx context.Context, c *client.Client, accountID string, in 
 	return c.PostJSON(ctx, "/adAccounts/"+accountID+"/creatives", in, nil)
 }
 
+// CreateInlineCreativeInput holds the fields for creating an inline creative
+// (ad with content created directly, not referencing an existing post).
+type CreateInlineCreativeInput struct {
+	Campaign       string
+	AccountID      string
+	OrgID          string
+	IntendedStatus string
+	Name           string
+	Commentary     string
+	ImageURN       string
+	ImageTitle     string
+	LandingPageURL string
+	CTALabel       string
+}
+
+// CreateInlineCreative creates a creative with inline post content via the
+// ?action=createInline endpoint. Returns the new resource id.
+func CreateInlineCreative(ctx context.Context, c *client.Client, accountID string, in *CreateInlineCreativeInput) (string, error) {
+	post := map[string]any{
+		"adContext": map[string]any{
+			"dscAdAccount": urn.Wrap(urn.Account, accountID),
+			"dscStatus":    "ACTIVE",
+		},
+		"author":                    urn.Wrap(urn.Organization, in.OrgID),
+		"commentary":                in.Commentary,
+		"visibility":                "PUBLIC",
+		"lifecycleState":            "PUBLISHED",
+		"isReshareDisabledByAuthor": false,
+	}
+	if in.ImageURN != "" {
+		post["content"] = map[string]any{
+			"media": map[string]any{
+				"id":    in.ImageURN,
+				"title": in.ImageTitle,
+			},
+		}
+	}
+	if in.LandingPageURL != "" {
+		post["contentLandingPage"] = in.LandingPageURL
+	}
+	if in.CTALabel != "" {
+		post["contentCallToActionLabel"] = in.CTALabel
+	}
+	creative := map[string]any{
+		"campaign":       urn.Wrap(urn.Campaign, in.Campaign),
+		"intendedStatus": in.IntendedStatus,
+		"inlineContent":  map[string]any{"post": post},
+	}
+	if in.Name != "" {
+		creative["name"] = in.Name
+	}
+	body := map[string]any{"creative": creative}
+	return c.PostJSON(ctx, fmt.Sprintf("/adAccounts/%s/creatives?action=createInline", accountID), body, nil)
+}
+
 // UpdateCreativeStatus performs a PARTIAL_UPDATE on a creative to change its
 // intendedStatus. creativeURN is the full URN (urn:li:sponsoredCreative:123)
 // or a bare numeric id.

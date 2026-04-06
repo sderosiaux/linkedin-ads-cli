@@ -19,6 +19,7 @@ func newCreativesCmd() *cobra.Command {
 		newCreativesListCmd(),
 		newCreativesGetCmd(),
 		newCreativesCreateCmd(),
+		newCreativesCreateInlineCmd(),
 		newCreativesUpdateStatusCmd(),
 	)
 	return root
@@ -110,6 +111,69 @@ func newCreativesCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&status, "status", "ACTIVE", "Intended status (ACTIVE, PAUSED)")
 	cmd.Flags().StringVar(&name, "name", "", "Optional creative name")
 	_ = cmd.MarkFlagRequired("campaign")
+	return cmd
+}
+
+func newCreativesCreateInlineCmd() *cobra.Command {
+	var (
+		campaignID  string
+		orgID       string
+		text        string
+		imageURN    string
+		imageTitle  string
+		landingPage string
+		cta         string
+		status      string
+		name        string
+	)
+	cmd := &cobra.Command{
+		Use:   "create-inline",
+		Short: "Create a creative with inline post content (no existing post needed)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			in := &api.CreateInlineCreativeInput{
+				Campaign:       campaignID,
+				AccountID:      accountID,
+				OrgID:          orgID,
+				IntendedStatus: strings.ToUpper(status),
+				Name:           name,
+				Commentary:     text,
+				ImageURN:       imageURN,
+				ImageTitle:     imageTitle,
+				LandingPageURL: landingPage,
+				CTALabel:       cta,
+			}
+			summary := fmt.Sprintf("POST /adAccounts/%s/creatives?action=createInline", accountID)
+			return executeWrite(cmd, summary, in, func() error {
+				id, err := api.CreateInlineCreative(cmd.Context(), c, accountID, in)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created inline creative %s\n", id)
+				return err
+			})
+		},
+	}
+	cmd.Flags().StringVar(&campaignID, "campaign", "", "Campaign id (required)")
+	cmd.Flags().StringVar(&orgID, "org", "", "Organization id (required)")
+	cmd.Flags().StringVar(&text, "text", "", "Post commentary text (required)")
+	cmd.Flags().StringVar(&imageURN, "image", "", "Image URN (optional)")
+	cmd.Flags().StringVar(&imageTitle, "image-title", "", "Image title (optional)")
+	cmd.Flags().StringVar(&landingPage, "landing-page", "", "Landing page URL (optional)")
+	cmd.Flags().StringVar(&cta, "cta", "", "Call-to-action label e.g. LEARN_MORE (optional)")
+	cmd.Flags().StringVar(&status, "status", "ACTIVE", "Intended status")
+	cmd.Flags().StringVar(&name, "name", "", "Optional creative name")
+	_ = cmd.MarkFlagRequired("campaign")
+	_ = cmd.MarkFlagRequired("org")
+	_ = cmd.MarkFlagRequired("text")
 	return cmd
 }
 

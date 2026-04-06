@@ -98,6 +98,79 @@ func TestCreateCreative(t *testing.T) {
 	}
 }
 
+func TestCreateInlineCreative_BodyShape(t *testing.T) {
+	t.Parallel()
+	var gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path + "?" + r.URL.RawQuery
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("X-RestLi-Id", "urn:li:sponsoredCreative:55")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	in := &CreateInlineCreativeInput{
+		Campaign:       "42",
+		AccountID:      "777",
+		OrgID:          "789",
+		IntendedStatus: "ACTIVE",
+		Commentary:     "Check out our product!",
+		ImageURN:       "urn:li:image:XXX",
+		ImageTitle:     "Product Shot",
+		LandingPageURL: "https://example.com",
+		CTALabel:       "LEARN_MORE",
+	}
+	id, err := CreateInlineCreative(context.Background(), c, "777", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "urn:li:sponsoredCreative:55" {
+		t.Errorf("id: %q", id)
+	}
+	if !strings.Contains(gotPath, "action=createInline") {
+		t.Errorf("path: %q", gotPath)
+	}
+
+	// Verify nested body structure
+	creative, ok := gotBody["creative"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing creative key in body: %+v", gotBody)
+	}
+	if creative["campaign"] != "urn:li:sponsoredCampaign:42" {
+		t.Errorf("campaign: %v", creative["campaign"])
+	}
+	inline, ok := creative["inlineContent"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing inlineContent: %+v", creative)
+	}
+	post, ok := inline["post"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing post: %+v", inline)
+	}
+	if post["author"] != "urn:li:organization:789" {
+		t.Errorf("author: %v", post["author"])
+	}
+	if post["commentary"] != "Check out our product!" {
+		t.Errorf("commentary: %v", post["commentary"])
+	}
+	if post["contentLandingPage"] != "https://example.com" {
+		t.Errorf("contentLandingPage: %v", post["contentLandingPage"])
+	}
+	if post["contentCallToActionLabel"] != "LEARN_MORE" {
+		t.Errorf("contentCallToActionLabel: %v", post["contentCallToActionLabel"])
+	}
+	adCtx, ok := post["adContext"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing adContext: %+v", post)
+	}
+	if adCtx["dscAdAccount"] != "urn:li:sponsoredAccount:777" {
+		t.Errorf("dscAdAccount: %v", adCtx["dscAdAccount"])
+	}
+}
+
 func TestUpdateCreativeStatus(t *testing.T) {
 	t.Parallel()
 	var gotMethod, gotPath, gotRestli string

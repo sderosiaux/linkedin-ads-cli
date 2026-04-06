@@ -10,6 +10,7 @@ const (
 	CampaignGroup Kind = "sponsoredCampaignGroup"
 	Campaign      Kind = "sponsoredCampaign"
 	Creative      Kind = "sponsoredCreative"
+	Organization  Kind = "organization"
 )
 
 // Wrap returns a full LinkedIn URN for the given kind and id. If id already

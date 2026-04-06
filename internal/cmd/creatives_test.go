@@ -180,6 +180,34 @@ func TestCreativesCreate_DryRun(t *testing.T) {
 	}
 }
 
+func TestCreativesCreateInline_DryRun(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--dry-run",
+		"creatives", "create-inline",
+		"--campaign", "42", "--org", "789", "--text", "Hello world",
+		"--image", "urn:li:image:XXX", "--landing-page", "https://example.com",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "createInline") {
+		t.Errorf("expected createInline in output, got: %s", s)
+	}
+	if !strings.Contains(s, "Hello world") {
+		t.Errorf("expected commentary, got: %s", s)
+	}
+}
+
 func TestCreativesUpdateStatus_DryRun(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
