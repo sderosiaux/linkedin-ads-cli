@@ -66,3 +66,49 @@ func PaginateStartCount(ctx context.Context, c *Client, path string, q url.Value
 	}
 	return json.Unmarshal(b, dst)
 }
+
+// pagedTokenResponse is the cursor envelope used by newer LinkedIn finders.
+type pagedTokenResponse struct {
+	Elements json.RawMessage `json:"elements"`
+	Metadata struct {
+		NextPageToken string `json:"nextPageToken"`
+	} `json:"metadata"`
+}
+
+// PaginateToken walks an endpoint using the metadata.nextPageToken cursor and
+// decodes the concatenated elements into dst. If limit > 0, iteration stops as
+// soon as dst holds limit items.
+func PaginateToken(ctx context.Context, c *Client, path string, q url.Values, limit int, dst any) error {
+	if q == nil {
+		q = url.Values{}
+	}
+	var accumulated []json.RawMessage
+	for {
+		var page pagedTokenResponse
+		if err := c.GetJSON(ctx, path, q, &page); err != nil {
+			return err
+		}
+		var raws []json.RawMessage
+		if len(page.Elements) > 0 {
+			if err := json.Unmarshal(page.Elements, &raws); err != nil {
+				return err
+			}
+		}
+		accumulated = append(accumulated, raws...)
+
+		if limit > 0 && len(accumulated) >= limit {
+			accumulated = accumulated[:limit]
+			break
+		}
+		if page.Metadata.NextPageToken == "" {
+			break
+		}
+		q.Set("pageToken", page.Metadata.NextPageToken)
+	}
+
+	b, err := json.Marshal(accumulated)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, dst)
+}

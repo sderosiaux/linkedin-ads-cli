@@ -62,3 +62,44 @@ func TestPaginateStartCount_HonorsLimit(t *testing.T) {
 		t.Fatalf("expected 3 items (limit), got %d", len(all))
 	}
 }
+
+func TestPaginateToken(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("pageToken")
+		switch token {
+		case "":
+			_, _ = w.Write([]byte(`{"elements":[{"id":1}],"metadata":{"nextPageToken":"abc"}}`))
+		case "abc":
+			_, _ = w.Write([]byte(`{"elements":[{"id":2}],"metadata":{"nextPageToken":"def"}}`))
+		case "def":
+			_, _ = w.Write([]byte(`{"elements":[{"id":3}]}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	var all []map[string]any
+	if err := PaginateToken(context.Background(), c, "/x", nil, 0, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3, got %d", len(all))
+	}
+}
+
+func TestPaginateToken_HonorsLimit(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[{"id":1},{"id":2}],"metadata":{"nextPageToken":"abc"}}`))
+	}))
+	defer srv.Close()
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	var all []map[string]any
+	if err := PaginateToken(context.Background(), c, "/x", nil, 1, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1, got %d", len(all))
+	}
+}
