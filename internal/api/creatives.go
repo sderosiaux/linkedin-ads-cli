@@ -96,6 +96,26 @@ func ListCreatives(ctx context.Context, c *client.Client, accountID, campaignID 
 	return out, json.Unmarshal(b, &out)
 }
 
+// CreateCreativeInput is the payload for creating a standard creative that
+// references an existing post/share.
+type CreateCreativeInput struct {
+	Campaign       string           `json:"campaign"`
+	IntendedStatus string           `json:"intendedStatus"`
+	Content        *CreativeContent `json:"content,omitempty"`
+	Name           string           `json:"name,omitempty"`
+}
+
+// CreativeContent wraps the reference URN to an existing post/share.
+type CreativeContent struct {
+	Reference string `json:"reference"`
+}
+
+// CreateCreative creates a new creative under the given account. Returns the
+// new resource id from the X-RestLi-Id header.
+func CreateCreative(ctx context.Context, c *client.Client, accountID string, in *CreateCreativeInput) (string, error) {
+	return c.PostJSON(ctx, "/adAccounts/"+accountID+"/creatives", in, nil)
+}
+
 // UpdateCreativeStatus performs a PARTIAL_UPDATE on a creative to change its
 // intendedStatus. creativeURN is the full URN (urn:li:sponsoredCreative:123)
 // or a bare numeric id.

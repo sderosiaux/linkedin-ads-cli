@@ -150,6 +150,36 @@ func TestCreativesList_MissingCampaignIsCleanError(t *testing.T) {
 	}
 }
 
+func TestCreativesCreate_DryRun(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--dry-run",
+		"creatives", "create",
+		"--campaign", "42", "--content-reference", "urn:li:share:999",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "POST /adAccounts/777/creatives") {
+		t.Errorf("expected POST summary, got: %s", s)
+	}
+	if !strings.Contains(s, "urn:li:sponsoredCampaign:42") {
+		t.Errorf("expected campaign URN, got: %s", s)
+	}
+	if !strings.Contains(s, "urn:li:share:999") {
+		t.Errorf("expected content reference, got: %s", s)
+	}
+}
+
 func TestCreativesUpdateStatus_DryRun(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")

@@ -65,6 +65,39 @@ func TestListCreatives(t *testing.T) {
 	}
 }
 
+func TestCreateCreative(t *testing.T) {
+	t.Parallel()
+	var gotPath string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("X-RestLi-Id", "urn:li:sponsoredCreative:99")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	in := &CreateCreativeInput{
+		Campaign:       "urn:li:sponsoredCampaign:42",
+		IntendedStatus: "ACTIVE",
+		Content:        &CreativeContent{Reference: "urn:li:share:12345"},
+	}
+	id, err := CreateCreative(context.Background(), c, "777", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/adAccounts/777/creatives" {
+		t.Errorf("path: %q", gotPath)
+	}
+	if id != "urn:li:sponsoredCreative:99" {
+		t.Errorf("id: %q", id)
+	}
+	if !strings.Contains(string(gotBody), `"reference"`) || !strings.Contains(string(gotBody), `"urn:li:share:12345"`) {
+		t.Errorf("body: %s", string(gotBody))
+	}
+}
+
 func TestUpdateCreativeStatus(t *testing.T) {
 	t.Parallel()
 	var gotMethod, gotPath, gotRestli string

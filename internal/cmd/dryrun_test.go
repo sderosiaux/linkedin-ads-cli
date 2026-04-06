@@ -52,6 +52,15 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 		want string
 	}{
 		{
+			name: "creatives create",
+			args: []string{
+				"--config", cfgPath, "--dry-run",
+				"creatives", "create",
+				"--campaign", "42", "--content-reference", "urn:li:share:999",
+			},
+			want: "POST /adAccounts/12345/creatives",
+		},
+		{
 			name: "creatives update-status",
 			args: []string{
 				"--config", cfgPath, "--dry-run",

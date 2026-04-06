@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
+	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,7 @@ func newCreativesCmd() *cobra.Command {
 	root.AddCommand(
 		newCreativesListCmd(),
 		newCreativesGetCmd(),
+		newCreativesCreateCmd(),
 		newCreativesUpdateStatusCmd(),
 	)
 	return root
@@ -59,6 +61,55 @@ func newCreativesListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
+	return cmd
+}
+
+func newCreativesCreateCmd() *cobra.Command {
+	var (
+		campaignID string
+		contentRef string
+		status     string
+		name       string
+	)
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new creative referencing an existing post/share",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			in := &api.CreateCreativeInput{
+				Campaign:       urn.Wrap(urn.Campaign, campaignID),
+				IntendedStatus: strings.ToUpper(status),
+			}
+			if contentRef != "" {
+				in.Content = &api.CreativeContent{Reference: contentRef}
+			}
+			if name != "" {
+				in.Name = name
+			}
+			summary := fmt.Sprintf("POST /adAccounts/%s/creatives", accountID)
+			return executeWrite(cmd, summary, in, func() error {
+				id, err := api.CreateCreative(cmd.Context(), c, accountID, in)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created creative %s\n", id)
+				return err
+			})
+		},
+	}
+	cmd.Flags().StringVar(&campaignID, "campaign", "", "Campaign id (required)")
+	cmd.Flags().StringVar(&contentRef, "content-reference", "", "Post/share URN to reference")
+	cmd.Flags().StringVar(&status, "status", "ACTIVE", "Intended status (ACTIVE, PAUSED)")
+	cmd.Flags().StringVar(&name, "name", "", "Optional creative name")
+	_ = cmd.MarkFlagRequired("campaign")
 	return cmd
 }
 
