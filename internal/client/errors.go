@@ -21,10 +21,19 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
+	var base string
 	if e.Code != "" {
-		return fmt.Sprintf("linkedin api %d %s: %s", e.Status, e.Code, e.Message)
+		base = fmt.Sprintf("linkedin api %d %s: %s", e.Status, e.Code, e.Message)
+	} else {
+		base = fmt.Sprintf("linkedin api %d: %s", e.Status, e.Message)
 	}
-	return fmt.Sprintf("linkedin api %d: %s", e.Status, e.Message)
+	switch e.Status {
+	case http.StatusUnauthorized:
+		return base + " — run 'linkedin-ads auth login' to refresh your token"
+	case http.StatusForbidden:
+		return base + " — token is missing the required scope for this endpoint"
+	}
+	return base
 }
 
 // parseError reads resp.Body and returns an *APIError when the body matches
