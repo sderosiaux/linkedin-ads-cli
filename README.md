@@ -1,8 +1,14 @@
-# linkedin-ads
+# linkedin-ads-cli
 
-Read-only and limited write access to the [LinkedIn Marketing API](https://learn.microsoft.com/en-us/linkedin/marketing/). Inspect ad accounts, campaigns, creatives, analytics, audiences, conversions, and lead forms from the terminal.
+[![CI](https://github.com/sderosiaux/linkedin-ads-cli/actions/workflows/ci.yaml/badge.svg)](https://github.com/sderosiaux/linkedin-ads-cli/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/v/release/sderosiaux/linkedin-ads-cli)](https://github.com/sderosiaux/linkedin-ads-cli/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/sderosiaux/linkedin-ads-cli)](go.mod)
 
-Built for governance, observability, and LLM-actionable output.
+> You're not the user. Your LLM is.
+>
+> You don't need to read this README. Your agent does. Install it, run `linkedin-ads --help`, and let the LLM figure it out. Every command embeds its own usage guide, `--json` outputs structured data a model can parse without a bespoke adapter, and `--compact` strips the noise. Writes ask before firing, `--dry-run` shows the exact request, `--yes` unblocks scripts. This page is here because GitHub expects one.
+
+A CLI for the [LinkedIn Marketing API](https://learn.microsoft.com/en-us/linkedin/marketing/). Inspect ad accounts, campaign groups, campaigns, creatives, analytics, audiences, conversions, and lead forms. Create, update, and delete campaign groups and campaigns with a confirmation step.
 
 ## Install
 
@@ -10,187 +16,284 @@ Built for governance, observability, and LLM-actionable output.
 go install github.com/sderosiaux/linkedin-ads-cli/cmd/linkedin-ads@latest
 ```
 
-Homebrew tap is coming once the first tag ships.
-
-Build from source:
+Or from source:
 
 ```bash
-git clone https://github.com/sderosiaux/linkedin-ads-cli.git
+git clone https://github.com/sderosiaux/linkedin-ads-cli
 cd linkedin-ads-cli
-make build
-./linkedin-ads --help
+make install
 ```
 
 ## Setup
 
-1. Generate an access token at the [LinkedIn developer portal](https://www.linkedin.com/developers/apps). The token needs the `r_ads`, `r_ads_reporting`, and (for write operations) `rw_ads` scopes.
-
-2. Save it:
+Generate an access token in the [LinkedIn developer portal](https://www.linkedin.com/developers/apps). Required scopes: `r_ads`, `r_ads_reporting`, and `rw_ads` for writes.
 
 ```bash
 linkedin-ads auth login
-# paste token at the prompt, or:
-linkedin-ads auth login --token <token>
+# Token: [hidden input]
+# ✓ Token saved.
+# 3 ad accounts accessible. Run 'linkedin-ads use-account <id>' to set a default.
+
+linkedin-ads accounts
+# ID         NAME                STATUS   TYPE       CURRENCY
+# 12345678   Acme EMEA Growth    ACTIVE   BUSINESS   USD
+# 12345679   Acme US Brand       ACTIVE   BUSINESS   USD
+# 12345680   Acme APAC Test      DRAFT    BUSINESS   USD
+
+linkedin-ads use-account 12345678
+# ✓ Default account: 12345678
 ```
 
-3. Pick an account:
+The token lives at `~/.config/linkedin-ads/config.yaml` (mode `0600`). `LINKEDIN_ADS_TOKEN` as an env var always wins — useful for CI or when switching between accounts in scripts.
 
-```bash
-linkedin-ads accounts list
-linkedin-ads use-account 123456789
-linkedin-ads current-account
-```
-
-4. Optional: bump the LinkedIn-Version header (defaults to a recent value baked into the binary):
+LinkedIn versions its API by month. The binary ships with a recent default; bump it when LinkedIn releases a new version:
 
 ```bash
 linkedin-ads config set-version 202601
+# or per-call:
+linkedin-ads --version-date 202601 accounts
 ```
-
-The token and config live at `~/.config/linkedin-ads/config.yaml` with mode `0600`.
 
 ## Usage
 
+### Account snapshot
+
 ```
-linkedin-ads overview                            One-screen account snapshot
-linkedin-ads accounts list                       List accessible ad accounts
-linkedin-ads accounts get <id>                   Single account detail
-linkedin-ads use-account <id>                    Set the default account
-linkedin-ads current-account                     Print the default account
-linkedin-ads auth login [--token T]              Save an API token
-linkedin-ads auth status                         Show auth state
-linkedin-ads auth logout                         Clear the token
-linkedin-ads config show                         Print config (token masked)
-linkedin-ads config set-version <YYYYMM>         Set LinkedIn-Version header
-linkedin-ads campaign-groups list                List groups under an account
-linkedin-ads campaign-groups get <id>            Single group detail
-linkedin-ads campaign-groups create ...          Create a group
-linkedin-ads campaign-groups update <id> ...     Patch a group
-linkedin-ads campaign-groups delete <id>         Delete a group
-linkedin-ads campaigns list                      List campaigns
-linkedin-ads campaigns get <id>                  Single campaign detail
-linkedin-ads campaigns create ...                Create a campaign
-linkedin-ads campaigns update <id> ...           Patch a campaign
-linkedin-ads campaigns delete <id>               Delete a campaign
-linkedin-ads creatives list --campaign <id>      List creatives under a campaign
-linkedin-ads creatives get <urn>                 Single creative detail
-linkedin-ads analytics campaigns                 Analytics rolled up by campaign
-linkedin-ads analytics creatives --campaign <id> Analytics rolled up by creative
-linkedin-ads analytics demographics --campaign <id> --pivot <P>  Demographic breakdown
-linkedin-ads analytics reach --campaign <id>     Approximate unique reach
-linkedin-ads analytics daily-trends              Daily timeseries
-linkedin-ads analytics compare --a <id> --b <id> Compare two campaigns
-linkedin-ads audiences list                      List DMP segments
-linkedin-ads conversions list                    List conversion definitions
-linkedin-ads leads forms list                    List lead-gen forms
+$ linkedin-ads overview
+
+Account:          Acme EMEA Growth (12345678)
+Currency:         USD
+
+Campaign Groups:  4 active / 6 total
+Campaigns:        12 active / 5 paused / 17 total
+Spend (last 7d):  $4,238.50
+Impressions (7d): 1,238,402
+Clicks (7d):      8,231
 ```
 
-Every read command supports `--json` for structured output. Every write command supports `--dry-run` and `--yes`.
-
-## Global flags
-
-| Flag | Purpose |
-|---|---|
-| `--json` | Structured JSON output for LLM/script consumption |
-| `--compact` | Minimal JSON fields. Pairs with `--json`. |
-| `--limit N` | Cap array results at N items |
-| `--dry-run` | Print the request that would be sent without executing it |
-| `--yes` | Skip confirmation prompts on writes |
-| `--config <path>` | Override config file path (default `~/.config/linkedin-ads/config.yaml`) |
-
-Account-scoped commands also accept `--account <id>` to override the default for a single call.
-
-`--resolve` is a per-command flag, not global. It is wired on `campaigns list` and `campaign-groups list` and only takes effect together with `--json`.
-
-## Examples
-
-Workspace snapshot:
+### Reading resources
 
 ```bash
-linkedin-ads overview
+# Campaign groups and campaigns (bare form uses the default account)
+linkedin-ads campaign-groups
+linkedin-ads campaign-groups list --status ACTIVE
+linkedin-ads campaign-groups get 678
+
+linkedin-ads campaigns
+linkedin-ads campaigns list --group 678 --status ACTIVE
+linkedin-ads campaigns get 12345
+
+# Creatives under a campaign
+linkedin-ads creatives list --campaign 12345
+linkedin-ads creatives get urn:li:sponsoredCreative:123456789
+
+# Other resources
+linkedin-ads audiences list
+linkedin-ads conversions list
+linkedin-ads leads forms list
+```
+
+### Analytics
+
+```bash
+# Rolled up by campaign for an account (defaults to last 30 days)
+linkedin-ads analytics campaigns --start 2026-03-07 --end 2026-04-06
+
+# Per-creative breakdown for a campaign
+linkedin-ads analytics creatives --campaign 12345
+
+# Demographics: JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION
+linkedin-ads analytics demographics --campaign 12345 --pivot JOB_FUNCTION
+
+# Unique reach for a campaign
+linkedin-ads analytics reach --campaign 12345
+
+# Daily timeseries (campaign-scoped or account-scoped)
+linkedin-ads analytics daily-trends --campaign 12345
+
+# Two campaigns side-by-side (spend, impressions, clicks, ctr, cpc)
+linkedin-ads analytics compare --a 12345 --b 67890 --metric ctr
+
+# Performance breakdown for conversions or lead forms
+linkedin-ads conversions performance
+linkedin-ads leads performance --form 55555
+```
+
+### Writing
+
+Every write prints a diff, asks before firing, and logs a correlation UUID to stderr. `--dry-run` prints the HTTP request without sending it. `--yes` skips the prompt.
+
+```bash
+# Create a campaign group
+linkedin-ads campaign-groups create \
+    --name "Q2 Brand Push" \
+    --total-budget 5000 \
+    --currency USD \
+    --start 2026-04-01 \
+    --end 2026-06-30
+
+# Update (shows old → new diff, then prompts)
+linkedin-ads campaign-groups update 678 --status ACTIVE
+
+# Dry run before pausing
+linkedin-ads campaigns update 12345 --status PAUSED --dry-run
+# Updating campaign 12345 (Spring Promo)
+#   status: ACTIVE  →  PAUSED
+# POST /adCampaigns/12345
+# {"patch":{"$set":{"status":"PAUSED"}}}
+
+linkedin-ads campaigns update 12345 --status PAUSED --yes
+# correlation-id: f47ac10b-58cc-4372-a567-0e02b2c3d479
+# ✓ Updated.
+
+# Delete
+linkedin-ads campaigns delete 12345 --yes
+```
+
+Create a campaign:
+
+```bash
+linkedin-ads campaigns create \
+    --group 678 \
+    --name "Spring 2026" \
+    --daily-budget 100 \
+    --currency USD \
+    --objective BRAND_AWARENESS \
+    --type SPONSORED_UPDATES \
+    --locale en_US \
+    --start 2026-04-01
+```
+
+## LLM and script usage
+
+Add `--json` to any command for structured output. Add `--compact` to strip non-essential fields:
+
+```bash
+# Full account snapshot for a system prompt
 linkedin-ads overview --json
-```
 
-List active campaigns as compact JSON:
-
-```bash
+# Active campaigns, minimal fields
 linkedin-ads campaigns list --status ACTIVE --json --compact
 ```
 
-Pipe through `jq` for filtering:
+Example `linkedin-ads campaigns list --json --compact`:
 
-```bash
-linkedin-ads campaigns list --json --compact | jq '[.[] | select(.status=="ACTIVE")]'
+```json
+[
+  {
+    "id": 12345,
+    "name": "Spring Promo",
+    "status": "ACTIVE",
+    "campaignGroup": "urn:li:sponsoredCampaignGroup:678",
+    "dailyBudget": {"amount": "100", "currencyCode": "USD"},
+    "objectiveType": "BRAND_AWARENESS"
+  }
+]
 ```
 
-Last 30 days of spend by campaign:
-
-```bash
-linkedin-ads analytics campaigns --start 2026-03-07 --end 2026-04-06 --json
-```
-
-Daily trend for one campaign:
-
-```bash
-linkedin-ads analytics daily-trends --campaign 12345 --start 2026-03-30 --json
-```
-
-Demographic breakdown by job function:
-
-```bash
-linkedin-ads analytics demographics --campaign 12345 --pivot JOB_FUNCTION --json
-```
-
-Pause a campaign with a dry run first:
-
-```bash
-linkedin-ads campaigns update 12345 --status PAUSED --dry-run
-linkedin-ads campaigns update 12345 --status PAUSED --yes
-```
-
-Enrich campaignGroup URNs with names (JSON envelope under `_resolved`):
+Resolve URN references to human names (requires `--json`):
 
 ```bash
 linkedin-ads campaigns list --json --resolve
+# wraps output as {"data": [...], "_resolved": {"urn:li:...": "Q2 Brand Push"}}
 ```
 
-## Architecture
+Cap results:
 
-```
-cmd/linkedin-ads/        Binary entrypoint (version vars, root cmd wiring)
-internal/
-  api/                   Typed wrappers around the LinkedIn Marketing API
-  client/                HTTP client, retries, pagination, write methods
-  cmd/                   cobra commands (one file per resource group)
-  config/                YAML load/save at 0600
-  confirm/               Y/N prompt and dry-run plumbing
-  resolve/               URN -> name cache for --resolve
-  urn/                   URN wrap/unwrap helpers
+```bash
+linkedin-ads campaigns list --json --limit 5
 ```
 
-## Design
+Trace HTTP calls to stderr (no auth headers are ever printed):
 
-- Read access plus a small surface of writes (create, update, delete on campaigns and groups). Reads cover analytics, audiences, conversions, lead forms, creatives, and accounts.
-- JSON on every command for LLM and script consumers. `--compact` strips fields down to ids and labels.
-- Auto-pagination on list endpoints. Both `start/count` and `pageToken` styles are handled by the client.
-- Retry with exponential backoff on 429 and 5xx.
-- Token stored at `~/.config/linkedin-ads/config.yaml` with mode `0600`. The `config show` command masks it.
-- Writes prompt for confirmation. `--dry-run` prints the request without sending it. `--yes` skips the prompt.
-- URN resolution is opt-in via `--resolve` on `campaigns list` and `campaign-groups list`. Resolution requires `--json` and the lookup cache lives for the duration of a single command.
+```bash
+linkedin-ads --verbose accounts list
+# GET https://api.linkedin.com/rest/adAccounts?q=search (200, 142ms, 4.2KB)
+```
 
-## Stack
+## Global flags
 
-Go 1.22, [cobra](https://github.com/spf13/cobra), `gopkg.in/yaml.v3`, `golang.org/x/term`. Built and released with [goreleaser](https://goreleaser.com/), linted with [golangci-lint](https://golangci-lint.run/) v2.
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--compact` | Minimal fields only (requires `--json`) |
+| `--limit N` | Cap array results at N items |
+| `--account <id>` | Override the default account for this call |
+| `--dry-run` | Print the request that would be sent without executing it |
+| `--yes` | Skip confirmation prompts on writes |
+| `--verbose` | Log HTTP requests to stderr (no auth headers) |
+| `--version-date YYYYMM` | Override the `Linkedin-Version` header |
+| `--config <path>` | Alternative config file |
+
+`--resolve` is a per-command flag on `campaigns list` and `campaign-groups list` only.
+
+## Status values
+
+**Campaign groups and campaigns**
+
+| Status | Meaning |
+|--------|---------|
+| `ACTIVE` | Running |
+| `PAUSED` | Temporarily stopped |
+| `DRAFT` | Not yet submitted |
+| `ARCHIVED` | Kept for reporting, not serving |
+| `COMPLETED` | Ended (hit end date or total budget) |
+| `CANCELED` | Stopped before completion |
+| `PENDING_DELETION` | Scheduled for deletion |
+| `REMOVED` | Deleted |
+
+**Creatives**
+
+| Status | Meaning |
+|--------|---------|
+| `ACTIVE` | Serving |
+| `PAUSED` | Stopped |
+| `DRAFT` | Not yet submitted |
+| `PENDING_REVIEW` | Under LinkedIn ad review |
+| `REJECTED` | Failed review |
+| `ARCHIVED` / `CANCELED` / `REMOVED` | Inactive variants |
+
+**Accounts**: `ACTIVE`, `DRAFT`, `CANCELED`, `PENDING_DELETION`, `REMOVED`
+
+## Configuration
+
+| Source | Key | Priority |
+|--------|-----|----------|
+| `--version-date` flag | API version override | highest |
+| `LINKEDIN_ADS_TOKEN` env var | token | high |
+| `LINKEDIN_ADS_ACCOUNT` env var | default account | high |
+| `LINKEDIN_ADS_VERSION` env var | API version | high |
+| `~/.config/linkedin-ads/config.yaml` | token, default_account, api_version | fallback |
+
+Config file written by `linkedin-ads auth login` and `linkedin-ads use-account`:
+
+```yaml
+token: your-token-here
+default_account: "12345678"
+api_version: "202601"
+```
+
+Permissions are enforced: the file is created `0600` and the directory `0700`. A warning is printed if the file becomes world-readable.
+
+## Safety
+
+Writes are explicit. Every create, update, and delete:
+
+1. Fetches the current state (for updates) and prints a field-level diff.
+2. Prompts `Continue? [y/N]` unless `--yes` is set or stdin is not a TTY.
+3. Logs a `correlation-id: <uuid>` line to stderr before firing, so you can trace the call in LinkedIn's activity log.
+4. `--dry-run` stops at step 1 and prints the request that would be sent.
+
+There is no bulk delete. There is no write path for creatives, audiences, conversions, or lead forms.
 
 ## Contributing
 
-After cloning, install the pre-commit hook once:
-
 ```bash
-make install-hooks
+make install-hooks   # once
+make check           # tidy, vet, lint, test
 ```
 
-The hook runs `golangci-lint fmt` (auto-fix), `go build`, `go vet`, `golangci-lint run`, and `go mod tidy` on every commit touching `.go` files. It aborts the commit on any failure. Required tool: `golangci-lint` (v2+).
+The pre-commit hook runs `golangci-lint fmt`, `go build`, `go vet`, `golangci-lint run`, and `go mod tidy` on every commit that touches `.go` files. It aborts on any failure. Required tool: [golangci-lint](https://golangci-lint.run/) v2+.
 
 ## License
 

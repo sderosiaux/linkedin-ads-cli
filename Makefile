@@ -1,7 +1,10 @@
-.PHONY: build test lint check fmt vet tidy clean install-hooks
+.PHONY: build install test lint check fmt vet tidy clean install-hooks
 
 build:
 	go build -o linkedin-ads ./cmd/linkedin-ads
+
+install:
+	go install ./cmd/linkedin-ads
 
 test:
 	go test ./... -count=1 -short
@@ -10,7 +13,7 @@ lint:
 	golangci-lint run
 
 fmt:
-	gofumpt -l -w .
+	golangci-lint fmt
 
 vet:
 	go vet ./...
