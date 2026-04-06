@@ -14,7 +14,7 @@ import (
 
 func TestCreativesList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCreatives" {
+		if r.URL.Path != "/adAccounts/777/creatives" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -26,7 +26,7 @@ func TestCreativesList_JSON(t *testing.T) {
 					"campaign":       "urn:li:sponsoredCampaign:42",
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -35,7 +35,7 @@ func TestCreativesList_JSON(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -54,7 +54,7 @@ func TestCreativesList_JSON(t *testing.T) {
 
 func TestCreativesList_EmptyState_Terminal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -62,7 +62,7 @@ func TestCreativesList_EmptyState_Terminal(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -89,12 +89,12 @@ func TestCreativesList_Compact(t *testing.T) {
 					"status":         "ACTIVE",
 					"intendedStatus": "ACTIVE",
 					"campaign":       "urn:li:sponsoredCampaign:42",
-					"review":         "APPROVED",
+					"review":         map[string]any{"status": "APPROVED"},
 					"createdAt":      1700000000000,
 					"lastModifiedAt": 1710000000000,
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -103,7 +103,7 @@ func TestCreativesList_Compact(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -152,7 +152,9 @@ func TestCreativesList_MissingCampaignIsCleanError(t *testing.T) {
 
 func TestCreativesGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCreatives/urn:li:sponsoredCreative:1" {
+		// Accept either encoded or decoded form.
+		wantDecoded := "/adAccounts/777/creatives/urn:li:sponsoredCreative:1"
+		if r.URL.Path != wantDecoded {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"id":"urn:li:sponsoredCreative:1","status":"ACTIVE","intendedStatus":"ACTIVE","campaign":"urn:li:sponsoredCampaign:42"}`))
@@ -163,7 +165,7 @@ func TestCreativesGet_JSON(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -171,7 +173,7 @@ func TestCreativesGet_JSON(t *testing.T) {
 	out := &bytes.Buffer{}
 	root.SetOut(out)
 	root.SetErr(out)
-	root.SetArgs([]string{"--config", cfgPath, "--json", "creatives", "get", "urn:li:sponsoredCreative:1"})
+	root.SetArgs([]string{"--config", cfgPath, "--json", "creatives", "get", "1"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}

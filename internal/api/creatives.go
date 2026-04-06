@@ -2,40 +2,106 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
 )
 
-// Creative is a LinkedIn ad creative decoded from /adCreatives. Note that the
-// id is a URN string ("urn:li:sponsoredCreative:<n>") not an int64.
+// Creative is a LinkedIn ad creative decoded from
+// /adAccounts/{accountId}/creatives. Note that the id is a URN string
+// ("urn:li:sponsoredCreative:<n>") not an int64.
 type Creative struct {
-	ID             string `json:"id"`
-	Status         string `json:"status"`
-	IntendedStatus string `json:"intendedStatus"`
-	Campaign       string `json:"campaign"`
-	Review         string `json:"review,omitempty"`
-	CreatedAt      int64  `json:"createdAt,omitempty"`
-	LastModifiedAt int64  `json:"lastModifiedAt,omitempty"`
+	ID             string          `json:"id"`
+	Status         string          `json:"status"`
+	IntendedStatus string          `json:"intendedStatus"`
+	Campaign       string          `json:"campaign"`
+	Review         *CreativeReview `json:"review,omitempty"`
+	CreatedAt      int64           `json:"createdAt,omitempty"`
+	LastModifiedAt int64           `json:"lastModifiedAt,omitempty"`
 }
 
-// ListCreatives returns creatives under the given campaign id (bare).
+// CreativeReview is the review status envelope returned by the creatives API.
+type CreativeReview struct {
+	Status string `json:"status"`
+}
+
+// ReviewStatus returns the review status string, or "" if review is nil.
+func (c *Creative) ReviewStatus() string {
+	if c.Review == nil {
+		return ""
+	}
+	return c.Review.Status
+}
+
+// creativesPage is the response envelope for creatives listing.
+type creativesPage struct {
+	Elements json.RawMessage `json:"elements"`
+	Metadata struct {
+		NextPageToken string `json:"nextPageToken"`
+	} `json:"metadata"`
+}
+
+// ListCreatives returns creatives under the given account. When campaignID is
+// non-empty, results are filtered to that campaign via the campaigns=List(...)
+// query param. Uses metadata.nextPageToken pagination.
 // If limit > 0, iteration stops after limit items.
-func ListCreatives(ctx context.Context, c *client.Client, campaignID string, limit int) ([]Creative, error) {
-	campURN := urn.Wrap(urn.Campaign, campaignID)
-	rawQuery := fmt.Sprintf("q=criteria&campaigns=List(%s)", campURN)
-	var out []Creative
-	if err := client.PaginateStartCountRaw(ctx, c, "/adCreatives", rawQuery, 500, limit, &out); err != nil {
+func ListCreatives(ctx context.Context, c *client.Client, accountID, campaignID string, limit int) ([]Creative, error) {
+	path := "/adAccounts/" + accountID + "/creatives"
+
+	// Build raw query: q=criteria plus optional campaign filter.
+	// We must use raw query because List() parentheses and URN colons
+	// cannot survive url.Values.Encode().
+	rawBase := "q=criteria"
+	if campaignID != "" {
+		campURN := url.QueryEscape(urn.Wrap(urn.Campaign, campaignID))
+		rawBase += fmt.Sprintf("&campaigns=List(%s)", campURN)
+	}
+
+	var accumulated []json.RawMessage
+	token := ""
+	for {
+		rq := rawBase
+		if token != "" {
+			rq += "&pageToken=" + url.QueryEscape(token)
+		}
+		var page creativesPage
+		if err := c.GetJSONRawQuery(ctx, path, rq, &page); err != nil {
+			return nil, err
+		}
+		var raws []json.RawMessage
+		if len(page.Elements) > 0 {
+			if err := json.Unmarshal(page.Elements, &raws); err != nil {
+				return nil, err
+			}
+		}
+		accumulated = append(accumulated, raws...)
+		if limit > 0 && len(accumulated) >= limit {
+			accumulated = accumulated[:limit]
+			break
+		}
+		if page.Metadata.NextPageToken == "" {
+			break
+		}
+		token = page.Metadata.NextPageToken
+	}
+
+	b, err := json.Marshal(accumulated)
+	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	var out []Creative
+	return out, json.Unmarshal(b, &out)
 }
 
-// GetCreative fetches a single creative by URN-style id.
-func GetCreative(ctx context.Context, c *client.Client, id string) (*Creative, error) {
+// GetCreative fetches a single creative by its bare numeric id. The URN is
+// built and URL-encoded before placing it in the path segment.
+func GetCreative(ctx context.Context, c *client.Client, accountID, creativeID string) (*Creative, error) {
+	encodedURN := url.PathEscape(urn.Wrap(urn.Creative, creativeID))
 	var cr Creative
-	if err := c.GetJSON(ctx, "/adCreatives/"+id, nil, &cr); err != nil {
+	if err := c.GetJSON(ctx, "/adAccounts/"+accountID+"/creatives/"+encodedURN, nil, &cr); err != nil {
 		return nil, err
 	}
 	return &cr, nil

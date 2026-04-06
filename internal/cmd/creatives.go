@@ -28,11 +28,15 @@ func newCreativesListCmd() *cobra.Command {
 			if campaignID == "" {
 				return errors.New("--campaign required")
 			}
-			c, _, err := clientFromConfig(cmd)
+			c, cfg, err := clientFromConfig(cmd)
 			if err != nil {
 				return err
 			}
-			creatives, err := api.ListCreatives(cmd.Context(), c, campaignID, limitFlag(cmd))
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			creatives, err := api.ListCreatives(cmd.Context(), c, accountID, campaignID, limitFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -44,7 +48,7 @@ func newCreativesListCmd() *cobra.Command {
 				b.WriteString("ID                                 STATUS    REVIEW    CAMPAIGN\n")
 				for _, cr := range creatives {
 					fmt.Fprintf(&b, "%-34s %-9s %-9s %s\n",
-						truncate(cr.ID, 34), cr.Status, cr.Review, cr.Campaign)
+						truncate(cr.ID, 34), cr.Status, cr.ReviewStatus(), cr.Campaign)
 				}
 				return b.String()
 			}, compactCreative)
@@ -57,14 +61,18 @@ func newCreativesListCmd() *cobra.Command {
 func newCreativesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
-		Short: "Get a single creative by URN-style id",
+		Short: "Get a single creative by numeric id",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, _, err := clientFromConfig(cmd)
+			c, cfg, err := clientFromConfig(cmd)
 			if err != nil {
 				return err
 			}
-			cr, err := api.GetCreative(cmd.Context(), c, args[0])
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			cr, err := api.GetCreative(cmd.Context(), c, accountID, args[0])
 			if err != nil {
 				return err
 			}
