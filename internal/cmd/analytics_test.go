@@ -61,6 +61,195 @@ func TestAnalyticsCampaigns_JSON(t *testing.T) {
 	}
 }
 
+func TestAnalyticsCreatives_JSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=CREATIVE") {
+			t.Errorf("missing CREATIVE: %s", raw)
+		}
+		if !strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+			t.Errorf("missing campaign: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":11,"clicks":2,"costInUsd":"0.50"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "analytics", "creatives", "--campaign", "42"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"impressions": 11`) {
+		t.Errorf("got: %s", out.String())
+	}
+}
+
+func TestAnalyticsDemographics_JSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=JOB_FUNCTION") {
+			t.Errorf("missing pivot: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":7,"clicks":1,"costInUsd":"0.10"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--json",
+		"analytics", "demographics",
+		"--campaign", "42", "--pivot", "JOB_FUNCTION",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"impressions": 7`) {
+		t.Errorf("got: %s", out.String())
+	}
+}
+
+func TestAnalyticsDemographics_BadPivot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "demographics",
+		"--campaign", "42", "--pivot", "FOO",
+	})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "invalid --pivot") {
+		t.Errorf("expected pivot hint, got: %v", err)
+	}
+}
+
+func TestAnalyticsReach_JSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=CAMPAIGN") {
+			t.Errorf("missing pivot: %s", raw)
+		}
+		if !strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+			t.Errorf("missing campaign: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0","approximateUniqueImpressions":900}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "analytics", "reach", "--campaign", "42"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"approximateUniqueImpressions": 900`) {
+		t.Errorf("got: %s", out.String())
+	}
+}
+
+func TestAnalyticsDailyTrends_AccountDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "timeGranularity=DAILY") {
+			t.Errorf("missing DAILY: %s", raw)
+		}
+		if !strings.Contains(raw, "accounts=List(urn:li:sponsoredAccount:777)") {
+			t.Errorf("missing accounts: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "analytics", "daily-trends"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAnalyticsCompare_TwoCampaigns(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		switch {
+		case strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:1)"):
+			_, _ = w.Write([]byte(`{"elements":[{"impressions":100,"clicks":10,"costInUsd":"5"}]}`))
+		case strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:2)"):
+			_, _ = w.Write([]byte(`{"elements":[{"impressions":200,"clicks":40,"costInUsd":"10"}]}`))
+		default:
+			t.Errorf("unexpected raw: %s", raw)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "compare",
+		"--a", "1", "--b", "2",
+		"--metric", "clicks",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "100") || !strings.Contains(s, "200") {
+		t.Errorf("expected both rows, got: %s", s)
+	}
+	if !strings.Contains(s, "300%") && !strings.Contains(s, "+300") {
+		// 10 -> 40 = +300%
+		t.Errorf("expected delta calc, got: %s", s)
+	}
+}
+
 func TestAnalyticsCampaigns_BadDate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

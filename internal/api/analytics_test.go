@@ -72,3 +72,123 @@ func TestGetCampaignAnalytics_BuildsRawQuery(t *testing.T) {
 		t.Errorf("row[0] derived: %+v", r0)
 	}
 }
+
+func TestGetCreativeAnalytics(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":2,"costInUsd":"3"}]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetCreativeAnalytics(context.Background(), c, "42", start, end, "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len: %d", len(rows))
+	}
+	if !strings.Contains(gotRaw, "pivot=CREATIVE") {
+		t.Errorf("missing pivot=CREATIVE: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		t.Errorf("missing campaigns list: %s", gotRaw)
+	}
+}
+
+func TestGetDemographicsAnalytics(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := GetDemographicsAnalytics(context.Background(), c, "42", "JOB_FUNCTION", start, end); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotRaw, "pivot=JOB_FUNCTION") {
+		t.Errorf("missing pivot=JOB_FUNCTION: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		t.Errorf("missing campaigns list: %s", gotRaw)
+	}
+}
+
+func TestGetDailyTrendsAnalytics_AccountScope(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := GetDailyTrendsAnalytics(context.Background(), c, "12345", "", start, end); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotRaw, "timeGranularity=DAILY") {
+		t.Errorf("missing DAILY: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "accounts=List(urn:li:sponsoredAccount:12345)") {
+		t.Errorf("missing accounts: %s", gotRaw)
+	}
+}
+
+func TestGetSingleCampaignAnalytics(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":100,"clicks":5,"costInUsd":"7.50"}]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetSingleCampaignAnalytics(context.Background(), c, "42", start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Impressions != 100 {
+		t.Errorf("rows: %+v", rows)
+	}
+	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		t.Errorf("missing campaigns: %s", gotRaw)
+	}
+}
+
+func TestGetDailyTrendsAnalytics_CampaignScope(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := GetDailyTrendsAnalytics(context.Background(), c, "", "42", start, end); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotRaw, "timeGranularity=DAILY") {
+		t.Errorf("missing DAILY: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		t.Errorf("missing campaigns: %s", gotRaw)
+	}
+}

@@ -45,6 +45,56 @@ func GetCampaignAnalytics(ctx context.Context, c *client.Client, accountID strin
 	return decodeAnalytics(ctx, c, raw)
 }
 
+// GetCreativeAnalytics returns rows pivoted by CREATIVE for a single campaign.
+func GetCreativeAnalytics(ctx context.Context, c *client.Client, campaignID string, start, end time.Time, granularity string) ([]AnalyticsRow, error) {
+	if granularity == "" {
+		granularity = "ALL"
+	}
+	campURN := urn.Wrap(urn.Campaign, campaignID)
+	raw := fmt.Sprintf("q=analytics&pivot=CREATIVE&timeGranularity=%s&dateRange=%s&campaigns=List(%s)",
+		granularity, formatDateRange(start, end), campURN)
+	return decodeAnalytics(ctx, c, raw)
+}
+
+// GetDemographicsAnalytics returns rows pivoted by a demographic dimension
+// (e.g. JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION) for
+// a single campaign. Demographics roll up across the full date range so this
+// always uses timeGranularity=ALL.
+func GetDemographicsAnalytics(ctx context.Context, c *client.Client, campaignID, pivot string, start, end time.Time) ([]AnalyticsRow, error) {
+	campURN := urn.Wrap(urn.Campaign, campaignID)
+	raw := fmt.Sprintf("q=analytics&pivot=%s&timeGranularity=ALL&dateRange=%s&campaigns=List(%s)",
+		pivot, formatDateRange(start, end), campURN)
+	return decodeAnalytics(ctx, c, raw)
+}
+
+// GetSingleCampaignAnalytics returns the rolled-up analytics row(s) for a
+// single campaign. Used by `analytics compare`. timeGranularity=ALL.
+func GetSingleCampaignAnalytics(ctx context.Context, c *client.Client, campaignID string, start, end time.Time) ([]AnalyticsRow, error) {
+	campURN := urn.Wrap(urn.Campaign, campaignID)
+	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN&timeGranularity=ALL&dateRange=%s&campaigns=List(%s)",
+		formatDateRange(start, end), campURN)
+	return decodeAnalytics(ctx, c, raw)
+}
+
+// GetDailyTrendsAnalytics returns rows with timeGranularity=DAILY scoped to
+// either an account (when accountID is set) or a single campaign (when
+// campaignID is set). Exactly one of the two should be non-empty; if both are
+// set, campaignID wins.
+func GetDailyTrendsAnalytics(ctx context.Context, c *client.Client, accountID, campaignID string, start, end time.Time) ([]AnalyticsRow, error) {
+	scope := ""
+	switch {
+	case campaignID != "":
+		scope = fmt.Sprintf("campaigns=List(%s)", urn.Wrap(urn.Campaign, campaignID))
+	case accountID != "":
+		scope = fmt.Sprintf("accounts=List(%s)", urn.Wrap(urn.Account, accountID))
+	default:
+		return nil, fmt.Errorf("daily trends needs an accountID or campaignID")
+	}
+	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN&timeGranularity=DAILY&dateRange=%s&%s",
+		formatDateRange(start, end), scope)
+	return decodeAnalytics(ctx, c, raw)
+}
+
 // decodeAnalytics issues the raw-query GET against /adAnalytics and decodes the
 // shared envelope into a slice of rows.
 func decodeAnalytics(ctx context.Context, c *client.Client, rawQuery string) ([]AnalyticsRow, error) {
