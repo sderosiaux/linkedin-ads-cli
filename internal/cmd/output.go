@@ -86,6 +86,18 @@ func limitFlag(cmd *cobra.Command) int {
 	return n
 }
 
+// dryRunFlag returns the value of the global --dry-run flag.
+func dryRunFlag(cmd *cobra.Command) bool {
+	b, _ := cmd.Root().PersistentFlags().GetBool("dry-run")
+	return b
+}
+
+// yesFlag returns the value of the global --yes flag.
+func yesFlag(cmd *cobra.Command) bool {
+	b, _ := cmd.Root().PersistentFlags().GetBool("yes")
+	return b
+}
+
 // applyLimit truncates a slice to limitFlag(cmd) items. Non-slice values pass
 // through unchanged.
 func applyLimit(cmd *cobra.Command, data any) any {
