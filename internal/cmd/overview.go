@@ -49,7 +49,6 @@ func newOverviewCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  runOverview,
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	return cmd
 }
 

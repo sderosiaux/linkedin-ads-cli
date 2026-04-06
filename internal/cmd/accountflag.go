@@ -7,11 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// accountIDFromFlagOrConfig returns the --account flag value if set,
-// otherwise the default account from config, otherwise an actionable error.
-// Use this from any account-scoped command.
+// accountIDFromFlagOrConfig returns the global --account persistent flag value
+// if set, otherwise the default account from config, otherwise an actionable
+// error. Use this from any account-scoped command.
 func accountIDFromFlagOrConfig(cmd *cobra.Command, cfg *config.Config) (string, error) {
-	id, _ := cmd.Flags().GetString("account")
+	id, _ := cmd.Root().PersistentFlags().GetString("account")
 	if id != "" {
 		return id, nil
 	}

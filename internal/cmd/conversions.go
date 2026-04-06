@@ -49,7 +49,6 @@ func newConversionsListCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	return cmd
 }
 
@@ -86,7 +85,6 @@ func newConversionsPerformanceCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd

@@ -109,7 +109,6 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	cmd.Flags().String("granularity", "ALL", "DAILY, MONTHLY, or ALL")
@@ -269,7 +268,6 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (overrides --account)")
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd

@@ -41,9 +41,9 @@ func newCampaignsListCmd() *cobra.Command {
 }
 
 // addCampaignsListFlags wires the flags shared between `campaigns` (bare) and
-// `campaigns list`. Both expose --account, --group, --status, --resolve.
+// `campaigns list`. --account is a global persistent flag and is not declared
+// here.
 func addCampaignsListFlags(cmd *cobra.Command) {
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("group", "", "Filter by campaign group id")
 	cmd.Flags().String("status", "", "Filter by status (ACTIVE, DRAFT, ...)")
 	cmd.Flags().Bool("resolve", false, "Enrich campaignGroup URNs with names (--json only)")
@@ -177,7 +177,6 @@ func newCampaignsCreateCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().StringVar(&groupID, "group", "", "Campaign group id (required)")
 	cmd.Flags().StringVar(&name, "name", "", "Campaign name (required)")
 	cmd.Flags().Int64Var(&dailyBudget, "daily-budget", 0, "Daily budget amount (required)")

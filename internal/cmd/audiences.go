@@ -49,6 +49,5 @@ func newAudiencesListCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	return cmd
 }

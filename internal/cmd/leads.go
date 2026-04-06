@@ -60,7 +60,6 @@ func newLeadsPerformanceCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("form", "", "Filter by lead-gen form id")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
@@ -99,6 +98,5 @@ func newLeadsFormsListCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	return cmd
 }

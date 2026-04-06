@@ -24,6 +24,7 @@ func NewRootCmd() *cobra.Command {
 	root.PersistentFlags().Bool("dry-run", false, "Print the request that would be sent without executing it")
 	root.PersistentFlags().Bool("yes", false, "Skip confirmation prompts")
 	root.PersistentFlags().String("version-date", "", "Override Linkedin-Version header (YYYYMM)")
+	root.PersistentFlags().String("account", "", "Override default account for this call")
 	root.AddCommand(
 		newAuthCmd(),
 		newUseAccountCmd(),
