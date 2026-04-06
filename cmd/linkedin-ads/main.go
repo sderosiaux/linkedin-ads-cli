@@ -3,9 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/sderosiaux/linkedin-ads-cli/internal/cmd"
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "linkedin-ads: not yet wired up")
-	os.Exit(1)
+	if err := cmd.NewRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
