@@ -219,13 +219,13 @@ func TestCampaignsList_GroupFilter(t *testing.T) {
 
 func TestCampaignsList_ResolveJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/adAccounts/777/adCampaigns":
+		switch r.URL.Path {
+		case "/adAccounts/777/adCampaigns":
 			_, _ = w.Write([]byte(`{"elements":[
 				{"id":10,"name":"C1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"},
 				{"id":11,"name":"C2","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}
 			],"metadata":{}}`))
-		case strings.HasPrefix(r.URL.Path, "/adCampaignGroups/111"):
+		case "/adAccounts/777/adCampaignGroups/111":
 			_, _ = w.Write([]byte(`{"id":111,"name":"Q1 Push","status":"ACTIVE"}`))
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
