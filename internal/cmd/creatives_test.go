@@ -150,6 +150,50 @@ func TestCreativesList_MissingCampaignIsCleanError(t *testing.T) {
 	}
 }
 
+func TestCreativesUpdateStatus_DryRun(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--dry-run", "creatives", "update-status", "123", "--status", "PAUSED"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "update-status") {
+		t.Errorf("expected update-status in dry-run output, got: %s", s)
+	}
+	if !strings.Contains(s, "PAUSED") {
+		t.Errorf("expected PAUSED in dry-run output, got: %s", s)
+	}
+}
+
+func TestCreativesUpdateStatus_InvalidStatus(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "creatives", "update-status", "123", "--status", "INVALID"})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "invalid --status") {
+		t.Errorf("expected status hint, got: %v", err)
+	}
+}
+
 func TestCreativesGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Accept either encoded or decoded form.

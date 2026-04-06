@@ -96,6 +96,21 @@ func ListCreatives(ctx context.Context, c *client.Client, accountID, campaignID 
 	return out, json.Unmarshal(b, &out)
 }
 
+// UpdateCreativeStatus performs a PARTIAL_UPDATE on a creative to change its
+// intendedStatus. creativeURN is the full URN (urn:li:sponsoredCreative:123)
+// or a bare numeric id.
+func UpdateCreativeStatus(ctx context.Context, c *client.Client, accountID, creativeURN, status string) error {
+	encoded := url.PathEscape(urn.Wrap(urn.Creative, creativeURN))
+	body := map[string]any{
+		"patch": map[string]any{
+			"$set": map[string]any{
+				"intendedStatus": status,
+			},
+		},
+	}
+	return c.PartialUpdate(ctx, "/adAccounts/"+accountID+"/creatives/"+encoded, body)
+}
+
 // GetCreative fetches a single creative by its bare numeric id. The URN is
 // built and URL-encoded before placing it in the path segment.
 func GetCreative(ctx context.Context, c *client.Client, accountID, creativeID string) (*Creative, error) {

@@ -14,7 +14,11 @@ func newCreativesCmd() *cobra.Command {
 		Use:   "creatives",
 		Short: "List and inspect ad creatives",
 	}
-	root.AddCommand(newCreativesListCmd(), newCreativesGetCmd())
+	root.AddCommand(
+		newCreativesListCmd(),
+		newCreativesGetCmd(),
+		newCreativesUpdateStatusCmd(),
+	)
 	return root
 }
 
@@ -55,6 +59,52 @@ func newCreativesListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
+	return cmd
+}
+
+var validCreativeStatuses = map[string]struct{}{
+	"ACTIVE":   {},
+	"PAUSED":   {},
+	"ARCHIVED": {},
+}
+
+func newCreativesUpdateStatusCmd() *cobra.Command {
+	var status string
+	cmd := &cobra.Command{
+		Use:   "update-status <urn-or-id>",
+		Short: "Change the intended status of a creative",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			status = strings.ToUpper(status)
+			if _, ok := validCreativeStatuses[status]; !ok {
+				return fmt.Errorf("invalid --status %q (want ACTIVE, PAUSED, or ARCHIVED)", status)
+			}
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			urnOrID := args[0]
+			payload := map[string]any{
+				"patch": map[string]any{
+					"$set": map[string]any{"intendedStatus": status},
+				},
+			}
+			summary := fmt.Sprintf("POST /adAccounts/%s/creatives/%s (update-status → %s)", accountID, urnOrID, status)
+			return executeWrite(cmd, summary, payload, func() error {
+				if err := api.UpdateCreativeStatus(cmd.Context(), c, accountID, urnOrID, status); err != nil {
+					return err
+				}
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Creative %s status set to %s\n", urnOrID, status)
+				return err
+			})
+		},
+	}
+	cmd.Flags().StringVar(&status, "status", "", "ACTIVE, PAUSED, or ARCHIVED (required)")
+	_ = cmd.MarkFlagRequired("status")
 	return cmd
 }
 

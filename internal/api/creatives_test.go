@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,6 +62,39 @@ func TestListCreatives(t *testing.T) {
 	}
 	if creatives[0].ReviewStatus() != "APPROVED" {
 		t.Errorf("review: %q", creatives[0].ReviewStatus())
+	}
+}
+
+func TestUpdateCreativeStatus(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath, gotRestli string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotRestli = r.Header.Get("X-RestLi-Method")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	if err := UpdateCreativeStatus(context.Background(), c, "12345", "1", "PAUSED"); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method: %q", gotMethod)
+	}
+	// The URN is path-escaped: urn%3Ali%3AsponsoredCreative%3A1
+	wantDecoded := "/adAccounts/12345/creatives/urn:li:sponsoredCreative:1"
+	if gotPath != wantDecoded {
+		t.Errorf("path: %q", gotPath)
+	}
+	if gotRestli != "PARTIAL_UPDATE" {
+		t.Errorf("X-RestLi-Method: %q", gotRestli)
+	}
+	if !strings.Contains(string(gotBody), `"intendedStatus"`) || !strings.Contains(string(gotBody), `"PAUSED"`) {
+		t.Errorf("body: %s", string(gotBody))
 	}
 }
 
