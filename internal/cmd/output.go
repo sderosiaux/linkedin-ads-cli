@@ -40,9 +40,14 @@ func writeOutput(cmd *cobra.Command, data any, terminalFn func() string, compact
 // --json is set and resolved is non-empty, the output is wrapped as
 // {"data": <data>, "_resolved": <map>}; otherwise the helper degrades to
 // writeOutput. The terminal renderer is unchanged either way.
-func writeOutputWithResolved(cmd *cobra.Command, data any, resolved map[string]string, terminalFn func() string) error {
+//
+// When the optional compact projector is supplied AND resolved is empty, it is
+// forwarded to writeOutput. When resolved is non-empty the projector is
+// intentionally skipped — wrapping a {data, _resolved} envelope around stripped
+// rows would defeat the purpose of resolving URNs.
+func writeOutputWithResolved(cmd *cobra.Command, data any, resolved map[string]string, terminalFn func() string, compact ...compactFn) error {
 	if len(resolved) == 0 {
-		return writeOutput(cmd, data, terminalFn)
+		return writeOutput(cmd, data, terminalFn, compact...)
 	}
 	jsonFlag, _ := cmd.Root().PersistentFlags().GetBool("json")
 	if !jsonFlag {

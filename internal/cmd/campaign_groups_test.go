@@ -51,6 +51,43 @@ func TestCampaignGroupsList_JSON(t *testing.T) {
 	}
 }
 
+func TestCampaignGroupsList_Compact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[
+			{"id":111,"name":"Q1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777",
+			 "totalBudget":{"amount":"5000","currencyCode":"USD"},
+			 "runSchedule":{"start":1700000000000,"end":1710000000000}}
+		],"paging":{"start":0,"count":1,"total":1}}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--compact", "campaign-groups", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, `"id"`) || !strings.Contains(s, `"name"`) || !strings.Contains(s, `"status"`) {
+		t.Errorf("expected id/name/status, got: %s", s)
+	}
+	for _, stripped := range []string{`"totalBudget"`, `"runSchedule"`, `"account"`} {
+		if strings.Contains(s, stripped) {
+			t.Errorf("%s should be stripped in compact, got: %s", stripped, s)
+		}
+	}
+}
+
 func TestCampaignGroupsList_AccountFlagOverride(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Query().Get("search"), "urn:li:sponsoredAccount:999") {

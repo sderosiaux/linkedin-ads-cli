@@ -41,7 +41,7 @@ func newAccountsListCmd() *cobra.Command {
 						a.ID, truncate(a.Name, 19), a.Status, a.Type, a.Currency)
 				}
 				return b.String()
-			})
+			}, compactAccount)
 		},
 	}
 }

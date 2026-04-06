@@ -45,6 +45,45 @@ func TestAccountsList_JSON(t *testing.T) {
 	}
 }
 
+func TestAccountsList_Compact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{"id": 1, "name": "A", "status": "ACTIVE", "type": "BUSINESS", "currency": "USD"},
+			},
+			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--compact", "accounts", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, `"id"`) {
+		t.Errorf("expected id field, got: %s", s)
+	}
+	if !strings.Contains(s, `"currency"`) {
+		t.Errorf("expected currency field, got: %s", s)
+	}
+	if strings.Contains(s, `"type"`) {
+		t.Errorf("type should be stripped in compact, got: %s", s)
+	}
+}
+
 func TestAccountsList_Terminal(t *testing.T) {
 	// no t.Parallel — t.Setenv mutates process env
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

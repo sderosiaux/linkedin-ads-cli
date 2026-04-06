@@ -69,7 +69,7 @@ func newCampaignGroupsListCmd() *cobra.Command {
 						g.ID, truncate(g.Name, 19), g.Status, g.Account)
 				}
 				return b.String()
-			})
+			}, compactCampaignGroup)
 		},
 	}
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
