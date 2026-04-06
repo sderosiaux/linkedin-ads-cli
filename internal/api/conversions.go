@@ -52,7 +52,7 @@ type ConversionPerformanceRow struct {
 // pivot=CONVERSION is not verified against production — adjust if LinkedIn
 // rejects it. The CLI command surfaces the raw error to the user in that case.
 func GetConversionPerformance(ctx context.Context, c *client.Client, accountID string, start, end time.Time) ([]ConversionPerformanceRow, error) {
-	accountURN := urn.Wrap(urn.Account, accountID)
+	accountURN := EncodeURNForList(urn.Wrap(urn.Account, accountID))
 	rawQuery := fmt.Sprintf("q=analytics&pivot=CONVERSION&timeGranularity=ALL&dateRange=%s&accounts=List(%s)",
 		formatDateRange(start, end), accountURN)
 	var page struct {

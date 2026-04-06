@@ -118,7 +118,7 @@ func TestLeadsPerformance_JSON(t *testing.T) {
 func TestLeadsPerformance_FormFlag(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "leadGenForms=List(urn:li:leadGenForm:42)") {
+		if !strings.Contains(raw, "leadGenForms=List(urn%3Ali%3AleadGenForm%3A42)") {
 			t.Errorf("missing form filter in: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[]}`))

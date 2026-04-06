@@ -93,7 +93,7 @@ type LeadPerformanceRow struct {
 // pivot=LEAD_GEN_FORM is not verified against production — adjust if LinkedIn
 // rejects it. The CLI command surfaces the raw error to the user in that case.
 func GetLeadPerformance(ctx context.Context, c *client.Client, accountID, formID string, start, end time.Time) ([]LeadPerformanceRow, error) {
-	accountURN := urn.Wrap(urn.Account, accountID)
+	accountURN := EncodeURNForList(urn.Wrap(urn.Account, accountID))
 	parts := []string{
 		"q=analytics",
 		"pivot=LEAD_GEN_FORM",
@@ -102,7 +102,8 @@ func GetLeadPerformance(ctx context.Context, c *client.Client, accountID, formID
 		"accounts=List(" + accountURN + ")",
 	}
 	if formID != "" {
-		parts = append(parts, "leadGenForms=List(urn:li:leadGenForm:"+formID+")")
+		formURN := EncodeURNForList("urn:li:leadGenForm:" + formID)
+		parts = append(parts, "leadGenForms=List("+formURN+")")
 	}
 	rawQuery := strings.Join(parts, "&")
 	var page struct {

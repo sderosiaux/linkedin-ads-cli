@@ -60,7 +60,7 @@ func TestGetCampaignAnalytics_BuildsRawQuery(t *testing.T) {
 	if !strings.Contains(gotRaw, "dateRange=(start:(year:2026,month:1,day:1),end:(year:2026,month:1,day:31))") {
 		t.Errorf("dateRange not in raw form: %s", gotRaw)
 	}
-	if !strings.Contains(gotRaw, "accounts=List(urn:li:sponsoredAccount:12345)") {
+	if !strings.Contains(gotRaw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)") {
 		t.Errorf("accounts list not in raw form: %s", gotRaw)
 	}
 
@@ -95,7 +95,7 @@ func TestGetCreativeAnalytics(t *testing.T) {
 	if !strings.Contains(gotRaw, "pivot=CREATIVE") {
 		t.Errorf("missing pivot=CREATIVE: %s", gotRaw)
 	}
-	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+	if !strings.Contains(gotRaw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 		t.Errorf("missing campaigns list: %s", gotRaw)
 	}
 }
@@ -118,7 +118,7 @@ func TestGetDemographicsAnalytics(t *testing.T) {
 	if !strings.Contains(gotRaw, "pivot=JOB_FUNCTION") {
 		t.Errorf("missing pivot=JOB_FUNCTION: %s", gotRaw)
 	}
-	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+	if !strings.Contains(gotRaw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 		t.Errorf("missing campaigns list: %s", gotRaw)
 	}
 }
@@ -141,7 +141,7 @@ func TestGetDailyTrendsAnalytics_AccountScope(t *testing.T) {
 	if !strings.Contains(gotRaw, "timeGranularity=DAILY") {
 		t.Errorf("missing DAILY: %s", gotRaw)
 	}
-	if !strings.Contains(gotRaw, "accounts=List(urn:li:sponsoredAccount:12345)") {
+	if !strings.Contains(gotRaw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)") {
 		t.Errorf("missing accounts: %s", gotRaw)
 	}
 }
@@ -165,7 +165,7 @@ func TestGetSingleCampaignAnalytics(t *testing.T) {
 	if len(rows) != 1 || rows[0].Impressions != 100 {
 		t.Errorf("rows: %+v", rows)
 	}
-	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+	if !strings.Contains(gotRaw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 		t.Errorf("missing campaigns: %s", gotRaw)
 	}
 }
@@ -188,7 +188,7 @@ func TestGetDailyTrendsAnalytics_CampaignScope(t *testing.T) {
 	if !strings.Contains(gotRaw, "timeGranularity=DAILY") {
 		t.Errorf("missing DAILY: %s", gotRaw)
 	}
-	if !strings.Contains(gotRaw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+	if !strings.Contains(gotRaw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 		t.Errorf("missing campaigns: %s", gotRaw)
 	}
 }

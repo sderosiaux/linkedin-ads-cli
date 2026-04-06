@@ -80,7 +80,7 @@ func TestGetConversionPerformance(t *testing.T) {
 		if !strings.Contains(raw, "pivot=CONVERSION") {
 			t.Errorf("missing pivot=CONVERSION in: %s", raw)
 		}
-		if !strings.Contains(raw, "accounts=List(urn:li:sponsoredAccount:12345)") {
+		if !strings.Contains(raw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)") {
 			t.Errorf("missing accounts list in: %s", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{

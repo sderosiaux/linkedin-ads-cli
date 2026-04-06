@@ -39,7 +39,7 @@ func GetCampaignAnalytics(ctx context.Context, c *client.Client, accountID strin
 	if granularity == "" {
 		granularity = "ALL"
 	}
-	accountURN := urn.Wrap(urn.Account, accountID)
+	accountURN := EncodeURNForList(urn.Wrap(urn.Account, accountID))
 	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN&timeGranularity=%s&dateRange=%s&accounts=List(%s)",
 		granularity, formatDateRange(start, end), accountURN)
 	return decodeAnalytics(ctx, c, raw)
@@ -50,7 +50,7 @@ func GetCreativeAnalytics(ctx context.Context, c *client.Client, campaignID stri
 	if granularity == "" {
 		granularity = "ALL"
 	}
-	campURN := urn.Wrap(urn.Campaign, campaignID)
+	campURN := EncodeURNForList(urn.Wrap(urn.Campaign, campaignID))
 	raw := fmt.Sprintf("q=analytics&pivot=CREATIVE&timeGranularity=%s&dateRange=%s&campaigns=List(%s)",
 		granularity, formatDateRange(start, end), campURN)
 	return decodeAnalytics(ctx, c, raw)
@@ -61,7 +61,7 @@ func GetCreativeAnalytics(ctx context.Context, c *client.Client, campaignID stri
 // a single campaign. Demographics roll up across the full date range so this
 // always uses timeGranularity=ALL.
 func GetDemographicsAnalytics(ctx context.Context, c *client.Client, campaignID, pivot string, start, end time.Time) ([]AnalyticsRow, error) {
-	campURN := urn.Wrap(urn.Campaign, campaignID)
+	campURN := EncodeURNForList(urn.Wrap(urn.Campaign, campaignID))
 	raw := fmt.Sprintf("q=analytics&pivot=%s&timeGranularity=ALL&dateRange=%s&campaigns=List(%s)",
 		pivot, formatDateRange(start, end), campURN)
 	return decodeAnalytics(ctx, c, raw)
@@ -70,7 +70,7 @@ func GetDemographicsAnalytics(ctx context.Context, c *client.Client, campaignID,
 // GetSingleCampaignAnalytics returns the rolled-up analytics row(s) for a
 // single campaign. Used by `analytics compare`. timeGranularity=ALL.
 func GetSingleCampaignAnalytics(ctx context.Context, c *client.Client, campaignID string, start, end time.Time) ([]AnalyticsRow, error) {
-	campURN := urn.Wrap(urn.Campaign, campaignID)
+	campURN := EncodeURNForList(urn.Wrap(urn.Campaign, campaignID))
 	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN&timeGranularity=ALL&dateRange=%s&campaigns=List(%s)",
 		formatDateRange(start, end), campURN)
 	return decodeAnalytics(ctx, c, raw)
@@ -84,9 +84,9 @@ func GetDailyTrendsAnalytics(ctx context.Context, c *client.Client, accountID, c
 	scope := ""
 	switch {
 	case campaignID != "":
-		scope = fmt.Sprintf("campaigns=List(%s)", urn.Wrap(urn.Campaign, campaignID))
+		scope = fmt.Sprintf("campaigns=List(%s)", EncodeURNForList(urn.Wrap(urn.Campaign, campaignID)))
 	case accountID != "":
-		scope = fmt.Sprintf("accounts=List(%s)", urn.Wrap(urn.Account, accountID))
+		scope = fmt.Sprintf("accounts=List(%s)", EncodeURNForList(urn.Wrap(urn.Account, accountID)))
 	default:
 		return nil, fmt.Errorf("daily trends needs an accountID or campaignID")
 	}

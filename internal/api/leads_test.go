@@ -75,7 +75,7 @@ func TestGetLeadPerformance(t *testing.T) {
 		for _, want := range []string{
 			"q=analytics",
 			"pivot=LEAD_GEN_FORM",
-			"accounts=List(urn:li:sponsoredAccount:12345)",
+			"accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)",
 		} {
 			if !strings.Contains(raw, want) {
 				t.Errorf("raw query missing %q in: %s", want, raw)
@@ -116,7 +116,7 @@ func TestGetLeadPerformance_FormFilter(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "leadGenForms=List(urn:li:leadGenForm:42)") {
+		if !strings.Contains(raw, "leadGenForms=List(urn%3Ali%3AleadGenForm%3A42)") {
 			t.Errorf("missing leadGenForms filter in: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[]}`))

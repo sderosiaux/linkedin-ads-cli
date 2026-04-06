@@ -1,10 +1,18 @@
 package api
 
+import "net/url"
+
 // Money is the LinkedIn money envelope used by budgets, bids and conversion
 // values. Amount is a decimal string (e.g. "12.34").
 type Money struct {
 	Amount       string `json:"amount"`
 	CurrencyCode string `json:"currencyCode"`
+}
+
+// EncodeURNForList percent-encodes a URN for use inside a Rest.li List(...)
+// query parameter. The parens/commas stay raw but URN colons become %3A.
+func EncodeURNForList(u string) string {
+	return url.QueryEscape(u)
 }
 
 // DateRange holds an epoch-millis open or closed interval. Both bounds are

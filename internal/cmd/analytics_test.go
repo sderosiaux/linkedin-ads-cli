@@ -24,7 +24,7 @@ func TestAnalyticsCampaigns_JSON(t *testing.T) {
 		if !strings.Contains(raw, "dateRange=(start:(year:2026,month:1,day:1),end:(year:2026,month:1,day:31))") {
 			t.Errorf("dateRange shape wrong: %s", raw)
 		}
-		if !strings.Contains(raw, "accounts=List(urn:li:sponsoredAccount:777)") {
+		if !strings.Contains(raw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A777)") {
 			t.Errorf("accounts list shape wrong: %s", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -120,7 +120,7 @@ func TestAnalyticsCreatives_JSON(t *testing.T) {
 		if !strings.Contains(raw, "pivot=CREATIVE") {
 			t.Errorf("missing CREATIVE: %s", raw)
 		}
-		if !strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		if !strings.Contains(raw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 			t.Errorf("missing campaign: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[{"impressions":11,"clicks":2,"costInUsd":"0.50"}]}`))
@@ -208,7 +208,7 @@ func TestAnalyticsReach_JSON(t *testing.T) {
 		if !strings.Contains(raw, "pivot=CAMPAIGN") {
 			t.Errorf("missing pivot: %s", raw)
 		}
-		if !strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:42)") {
+		if !strings.Contains(raw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 			t.Errorf("missing campaign: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0","approximateUniqueImpressions":900}]}`))
@@ -239,7 +239,7 @@ func TestAnalyticsDailyTrends_AccountDefault(t *testing.T) {
 		if !strings.Contains(raw, "timeGranularity=DAILY") {
 			t.Errorf("missing DAILY: %s", raw)
 		}
-		if !strings.Contains(raw, "accounts=List(urn:li:sponsoredAccount:777)") {
+		if !strings.Contains(raw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A777)") {
 			t.Errorf("missing accounts: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0"}]}`))
@@ -265,9 +265,9 @@ func TestAnalyticsCompare_TwoCampaigns(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
 		switch {
-		case strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:1)"):
+		case strings.Contains(raw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A1)"):
 			_, _ = w.Write([]byte(`{"elements":[{"impressions":100,"clicks":10,"costInUsd":"5"}]}`))
-		case strings.Contains(raw, "campaigns=List(urn:li:sponsoredCampaign:2)"):
+		case strings.Contains(raw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A2)"):
 			_, _ = w.Write([]byte(`{"elements":[{"impressions":200,"clicks":40,"costInUsd":"10"}]}`))
 		default:
 			t.Errorf("unexpected raw: %s", raw)
