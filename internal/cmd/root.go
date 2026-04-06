@@ -18,7 +18,7 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().String("config", config.DefaultPath(), "config file path")
-	root.AddCommand(newAuthCmd(), newUseAccountCmd(), newCurrentAccountCmd())
+	root.AddCommand(newAuthCmd(), newUseAccountCmd(), newCurrentAccountCmd(), newConfigCmd())
 	return root
 }
 
