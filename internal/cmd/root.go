@@ -34,6 +34,7 @@ func NewRootCmd() *cobra.Command {
 		newAudiencesCmd(),
 		newConversionsCmd(),
 		newLeadsCmd(),
+		newOverviewCmd(),
 	)
 	return root
 }
