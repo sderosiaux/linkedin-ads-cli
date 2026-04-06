@@ -28,6 +28,7 @@ func NewRootCmd() *cobra.Command {
 		newConfigCmd(),
 		newAccountsCmd(),
 		newCampaignGroupsCmd(),
+		newCampaignsCmd(),
 	)
 	return root
 }
