@@ -16,7 +16,10 @@ func newCampaignGroupsCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "campaign-groups",
 		Short: "List and inspect ad campaign groups",
+		Args:  cobra.NoArgs,
+		RunE:  runCampaignGroupsList,
 	}
+	addCampaignGroupsListFlags(root)
 	root.AddCommand(
 		newCampaignGroupsListCmd(),
 		newCampaignGroupsGetCmd(),
@@ -32,50 +35,60 @@ func newCampaignGroupsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List campaign groups under an account",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, cfg, err := clientFromConfig(cmd)
-			if err != nil {
-				return err
-			}
-			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
-			if err != nil {
-				return err
-			}
-			statusFilter, _ := cmd.Flags().GetString("status")
-			groups, err := api.ListCampaignGroups(cmd.Context(), c, accountID, limitFlag(cmd))
-			if err != nil {
-				return err
-			}
-			if statusFilter != "" {
-				filtered := groups[:0]
-				for _, g := range groups {
-					if strings.EqualFold(g.Status, statusFilter) {
-						filtered = append(filtered, g)
-					}
-				}
-				groups = filtered
-			}
-			jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
-			var resolved map[string]string
-			if jsonOut && resolveFlag(cmd) {
-				urns := uniqueAccountURNs(groups)
-				resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
-			}
-			return writeOutputWithResolved(cmd, groups, resolved, func() string {
-				var b strings.Builder
-				b.WriteString("ID         NAME                STATUS    ACCOUNT\n")
-				for _, g := range groups {
-					fmt.Fprintf(&b, "%-10d %-19s %-9s %s\n",
-						g.ID, truncate(g.Name, 19), g.Status, g.Account)
-				}
-				return b.String()
-			}, compactCampaignGroup)
-		},
+		RunE:  runCampaignGroupsList,
 	}
+	addCampaignGroupsListFlags(cmd)
+	return cmd
+}
+
+// addCampaignGroupsListFlags wires the flags shared between
+// `campaign-groups` (bare) and `campaign-groups list`.
+func addCampaignGroupsListFlags(cmd *cobra.Command) {
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("status", "", "Filter by status (ACTIVE, DRAFT, ...)")
 	cmd.Flags().Bool("resolve", false, "Enrich account URNs with names (--json only)")
-	return cmd
+}
+
+// runCampaignGroupsList is shared by `campaign-groups` (bare) and
+// `campaign-groups list`.
+func runCampaignGroupsList(cmd *cobra.Command, _ []string) error {
+	c, cfg, err := clientFromConfig(cmd)
+	if err != nil {
+		return err
+	}
+	accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+	if err != nil {
+		return err
+	}
+	statusFilter, _ := cmd.Flags().GetString("status")
+	groups, err := api.ListCampaignGroups(cmd.Context(), c, accountID, limitFlag(cmd))
+	if err != nil {
+		return err
+	}
+	if statusFilter != "" {
+		filtered := groups[:0]
+		for _, g := range groups {
+			if strings.EqualFold(g.Status, statusFilter) {
+				filtered = append(filtered, g)
+			}
+		}
+		groups = filtered
+	}
+	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+	var resolved map[string]string
+	if jsonOut && resolveFlag(cmd) {
+		urns := uniqueAccountURNs(groups)
+		resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
+	}
+	return writeOutputWithResolved(cmd, groups, resolved, func() string {
+		var b strings.Builder
+		b.WriteString("ID         NAME                STATUS    ACCOUNT\n")
+		for _, g := range groups {
+			fmt.Fprintf(&b, "%-10d %-19s %-9s %s\n",
+				g.ID, truncate(g.Name, 19), g.Status, g.Account)
+		}
+		return b.String()
+	}, compactCampaignGroup)
 }
 
 func newCampaignGroupsGetCmd() *cobra.Command {

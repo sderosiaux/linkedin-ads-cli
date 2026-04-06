@@ -15,7 +15,10 @@ func newCampaignsCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "campaigns",
 		Short: "List and inspect ad campaigns",
+		Args:  cobra.NoArgs,
+		RunE:  runCampaignsList,
 	}
+	addCampaignsListFlags(root)
 	root.AddCommand(
 		newCampaignsListCmd(),
 		newCampaignsGetCmd(),
@@ -31,52 +34,61 @@ func newCampaignsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List campaigns under an account (optionally filtered by group)",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, cfg, err := clientFromConfig(cmd)
-			if err != nil {
-				return err
-			}
-			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
-			if err != nil {
-				return err
-			}
-			groupID, _ := cmd.Flags().GetString("group")
-			statusFilter, _ := cmd.Flags().GetString("status")
-			camps, err := api.ListCampaigns(cmd.Context(), c, accountID, groupID, limitFlag(cmd))
-			if err != nil {
-				return err
-			}
-			if statusFilter != "" {
-				filtered := camps[:0]
-				for _, x := range camps {
-					if strings.EqualFold(x.Status, statusFilter) {
-						filtered = append(filtered, x)
-					}
-				}
-				camps = filtered
-			}
-			jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
-			var resolved map[string]string
-			if jsonOut && resolveFlag(cmd) {
-				urns := uniqueCampaignGroupURNs(camps)
-				resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
-			}
-			return writeOutputWithResolved(cmd, camps, resolved, func() string {
-				var b strings.Builder
-				b.WriteString("ID         NAME                STATUS    TYPE                 OBJECTIVE          COST\n")
-				for _, x := range camps {
-					fmt.Fprintf(&b, "%-10d %-19s %-9s %-20s %-18s %s\n",
-						x.ID, truncate(x.Name, 19), x.Status, truncate(x.Type, 20), truncate(x.Objective, 18), x.CostType)
-				}
-				return b.String()
-			}, compactCampaign)
-		},
+		RunE:  runCampaignsList,
 	}
+	addCampaignsListFlags(cmd)
+	return cmd
+}
+
+// addCampaignsListFlags wires the flags shared between `campaigns` (bare) and
+// `campaigns list`. Both expose --account, --group, --status, --resolve.
+func addCampaignsListFlags(cmd *cobra.Command) {
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("group", "", "Filter by campaign group id")
 	cmd.Flags().String("status", "", "Filter by status (ACTIVE, DRAFT, ...)")
 	cmd.Flags().Bool("resolve", false, "Enrich campaignGroup URNs with names (--json only)")
-	return cmd
+}
+
+// runCampaignsList is shared by `campaigns` (bare) and `campaigns list`.
+func runCampaignsList(cmd *cobra.Command, _ []string) error {
+	c, cfg, err := clientFromConfig(cmd)
+	if err != nil {
+		return err
+	}
+	accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+	if err != nil {
+		return err
+	}
+	groupID, _ := cmd.Flags().GetString("group")
+	statusFilter, _ := cmd.Flags().GetString("status")
+	camps, err := api.ListCampaigns(cmd.Context(), c, accountID, groupID, limitFlag(cmd))
+	if err != nil {
+		return err
+	}
+	if statusFilter != "" {
+		filtered := camps[:0]
+		for _, x := range camps {
+			if strings.EqualFold(x.Status, statusFilter) {
+				filtered = append(filtered, x)
+			}
+		}
+		camps = filtered
+	}
+	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+	var resolved map[string]string
+	if jsonOut && resolveFlag(cmd) {
+		urns := uniqueCampaignGroupURNs(camps)
+		resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
+	}
+	return writeOutputWithResolved(cmd, camps, resolved, func() string {
+		var b strings.Builder
+		b.WriteString("ID         NAME                STATUS    TYPE                 OBJECTIVE          COST\n")
+		for _, x := range camps {
+			fmt.Fprintf(&b, "%-10d %-19s %-9s %-20s %-18s %s\n",
+				x.ID, truncate(x.Name, 19), x.Status, truncate(x.Type, 20), truncate(x.Objective, 18), x.CostType)
+		}
+		return b.String()
+	}, compactCampaign)
 }
 
 func newCampaignsGetCmd() *cobra.Command {

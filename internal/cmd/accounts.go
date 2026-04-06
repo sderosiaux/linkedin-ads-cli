@@ -12,6 +12,8 @@ func newAccountsCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "accounts",
 		Short: "List and inspect ad accounts",
+		Args:  cobra.NoArgs,
+		RunE:  runAccountsList,
 	}
 	root.AddCommand(newAccountsListCmd(), newAccountsGetCmd())
 	return root
@@ -22,27 +24,31 @@ func newAccountsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List accessible ad accounts",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, _, err := clientFromConfig(cmd)
-			if err != nil {
-				return err
-			}
-			limit := limitFlag(cmd)
-			accts, err := api.ListAccounts(cmd.Context(), c, limit)
-			if err != nil {
-				return err
-			}
-			return writeOutput(cmd, accts, func() string {
-				var b strings.Builder
-				b.WriteString("ID         NAME                STATUS   TYPE       CURRENCY\n")
-				for _, a := range accts {
-					fmt.Fprintf(&b, "%-10d %-19s %-8s %-10s %s\n",
-						a.ID, truncate(a.Name, 19), a.Status, a.Type, a.Currency)
-				}
-				return b.String()
-			}, compactAccount)
-		},
+		RunE:  runAccountsList,
 	}
+}
+
+// runAccountsList is shared by `accounts` (bare) and `accounts list` so users
+// can list without typing the subcommand.
+func runAccountsList(cmd *cobra.Command, _ []string) error {
+	c, _, err := clientFromConfig(cmd)
+	if err != nil {
+		return err
+	}
+	limit := limitFlag(cmd)
+	accts, err := api.ListAccounts(cmd.Context(), c, limit)
+	if err != nil {
+		return err
+	}
+	return writeOutput(cmd, accts, func() string {
+		var b strings.Builder
+		b.WriteString("ID         NAME                STATUS   TYPE       CURRENCY\n")
+		for _, a := range accts {
+			fmt.Fprintf(&b, "%-10d %-19s %-8s %-10s %s\n",
+				a.ID, truncate(a.Name, 19), a.Status, a.Type, a.Currency)
+		}
+		return b.String()
+	}, compactAccount)
 }
 
 func newAccountsGetCmd() *cobra.Command {

@@ -152,6 +152,38 @@ func TestAccountsGet_JSON(t *testing.T) {
 	}
 }
 
+func TestAccountsBare_DelegatesToList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{"id": 42, "name": "Bare", "status": "ACTIVE", "type": "BUSINESS", "currency": "USD"},
+			},
+			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "accounts"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), `"id": 42`) {
+		t.Errorf("expected id:42 in output: %s", out.String())
+	}
+}
+
 func TestAccountsList_MissingTokenIsCleanError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
