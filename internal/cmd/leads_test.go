@@ -14,8 +14,12 @@ import (
 
 func TestLeadsFormsList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/leadGenForms" {
+		if r.URL.Path != "/leadForms" {
 			t.Errorf("path: %s", r.URL.Path)
+		}
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "q=owner") {
+			t.Errorf("missing q=owner in: %s", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{

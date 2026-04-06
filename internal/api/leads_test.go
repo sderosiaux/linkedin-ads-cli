@@ -15,15 +15,16 @@ import (
 func TestListLeadForms(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/leadGenForms" {
+		if r.URL.Path != "/leadForms" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		q := r.URL.Query()
-		if q.Get("q") != "account" {
-			t.Errorf("q: %q", q.Get("q"))
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "q=owner") {
+			t.Errorf("missing q=owner in: %s", raw)
 		}
-		if q.Get("account") != "urn:li:sponsoredAccount:12345" {
-			t.Errorf("account: %q", q.Get("account"))
+		// The compound owner param must have raw parens with encoded colons.
+		if !strings.Contains(raw, "owner=(sponsoredAccount:urn%3Ali%3AsponsoredAccount%3A12345)") {
+			t.Errorf("missing compound owner in: %s", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
