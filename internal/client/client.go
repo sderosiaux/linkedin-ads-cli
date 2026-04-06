@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -91,8 +90,7 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("http %d: %s", resp.StatusCode, string(b))
+		return parseError(resp)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
