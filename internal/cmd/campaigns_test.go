@@ -70,6 +70,7 @@ func TestCampaignsList_Compact(t *testing.T) {
 					"type":          "SPONSORED_UPDATES",
 					"objectiveType": "WEBSITE_VISIT",
 					"costType":      "CPC",
+					"dailyBudget":   map[string]any{"amount": "100", "currencyCode": "USD"},
 				},
 			},
 			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
@@ -94,10 +95,12 @@ func TestCampaignsList_Compact(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	if !strings.Contains(s, `"id"`) || !strings.Contains(s, `"campaignGroup"`) {
-		t.Errorf("expected id and campaignGroup, got: %s", s)
+	for _, want := range []string{`"id"`, `"campaignGroup"`, `"dailyBudget"`, `"objectiveType"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %s in compact whitelist, got: %s", want, s)
+		}
 	}
-	for _, stripped := range []string{`"type"`, `"objectiveType"`, `"costType"`, `"account"`} {
+	for _, stripped := range []string{`"type"`, `"costType"`, `"account"`} {
 		if strings.Contains(s, stripped) {
 			t.Errorf("%s should be stripped in compact, got: %s", stripped, s)
 		}

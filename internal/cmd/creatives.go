@@ -44,7 +44,7 @@ func newCreativesListCmd() *cobra.Command {
 						truncate(cr.ID, 34), cr.Status, cr.Review, cr.Campaign)
 				}
 				return b.String()
-			})
+			}, compactCreative)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")

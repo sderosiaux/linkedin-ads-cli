@@ -113,10 +113,12 @@ func TestCampaignGroupsList_Compact(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	if !strings.Contains(s, `"id"`) || !strings.Contains(s, `"name"`) || !strings.Contains(s, `"status"`) {
-		t.Errorf("expected id/name/status, got: %s", s)
+	for _, want := range []string{`"id"`, `"name"`, `"status"`, `"totalBudget"`, `"runSchedule"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %s in compact whitelist, got: %s", want, s)
+		}
 	}
-	for _, stripped := range []string{`"totalBudget"`, `"runSchedule"`, `"account"`} {
+	for _, stripped := range []string{`"account"`} {
 		if strings.Contains(s, stripped) {
 			t.Errorf("%s should be stripped in compact, got: %s", stripped, s)
 		}

@@ -61,6 +61,59 @@ func TestAnalyticsCampaigns_JSON(t *testing.T) {
 	}
 }
 
+func TestAnalyticsCampaigns_Compact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{
+					"dateRange":                  map[string]any{"start": map[string]any{"year": 2026, "month": 1, "day": 1}},
+					"pivot":                      "CAMPAIGN",
+					"pivotValue":                 "urn:li:sponsoredCampaign:42",
+					"impressions":                1000,
+					"clicks":                     50,
+					"costInUsd":                  "12.34",
+					"externalWebsiteConversions": 3,
+					"oneClickLeads":              7,
+				},
+			},
+			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--json", "--compact",
+		"analytics", "campaigns",
+		"--start", "2026-01-01", "--end", "2026-01-31",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	for _, want := range []string{`"impressions"`, `"clicks"`, `"costInUsd"`, `"dateRange"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %s in compact whitelist, got: %s", want, s)
+		}
+	}
+	for _, stripped := range []string{`"pivotValue"`, `"oneClickLeads"`, `"pivot"`} {
+		if strings.Contains(s, stripped) {
+			t.Errorf("%s should be stripped in compact, got: %s", stripped, s)
+		}
+	}
+}
+
 func TestAnalyticsCreatives_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery

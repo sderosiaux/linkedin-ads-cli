@@ -79,8 +79,8 @@ func TestAccountsList_Compact(t *testing.T) {
 	if !strings.Contains(s, `"currency"`) {
 		t.Errorf("expected currency field, got: %s", s)
 	}
-	if strings.Contains(s, `"type"`) {
-		t.Errorf("type should be stripped in compact, got: %s", s)
+	if !strings.Contains(s, `"type"`) {
+		t.Errorf("expected type field in compact whitelist, got: %s", s)
 	}
 }
 

@@ -52,6 +52,54 @@ func TestCreativesList_JSON(t *testing.T) {
 	}
 }
 
+func TestCreativesList_Compact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{
+					"id":             "urn:li:sponsoredCreative:1",
+					"status":         "ACTIVE",
+					"intendedStatus": "ACTIVE",
+					"campaign":       "urn:li:sponsoredCampaign:42",
+					"review":         "APPROVED",
+					"createdAt":      1700000000000,
+					"lastModifiedAt": 1710000000000,
+				},
+			},
+			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--compact", "creatives", "list", "--campaign", "42"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	for _, want := range []string{`"id"`, `"status"`, `"intendedStatus"`, `"campaign"`, `"review"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %s in compact whitelist, got: %s", want, s)
+		}
+	}
+	for _, stripped := range []string{`"createdAt"`, `"lastModifiedAt"`} {
+		if strings.Contains(s, stripped) {
+			t.Errorf("%s should be stripped in compact, got: %s", stripped, s)
+		}
+	}
+}
+
 func TestCreativesList_MissingCampaignIsCleanError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

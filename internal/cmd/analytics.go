@@ -106,7 +106,7 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) })
+			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
@@ -153,7 +153,7 @@ func newAnalyticsCreativesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) })
+			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
@@ -190,7 +190,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) })
+			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
@@ -229,7 +229,7 @@ func newAnalyticsReachCmd() *cobra.Command {
 					fmt.Fprintf(&b, "%7d %7d %9s %7d\n", r.Impressions, r.Clicks, r.CostInUsd, r.Reach)
 				}
 				return b.String()
-			})
+			}, compactAnalyticsRow)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
@@ -265,7 +265,7 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) })
+			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (overrides --account)")
