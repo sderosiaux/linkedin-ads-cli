@@ -298,14 +298,29 @@ var validCompareMetrics = map[string]struct{}{
 func newAnalyticsCompareCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compare",
-		Short: "Compare two campaigns side-by-side over the last 30 days",
+		Short: "Compare two campaigns or campaign groups side-by-side",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, _ := cmd.Flags().GetString("a")
 			b, _ := cmd.Flags().GetString("b")
-			if a == "" || b == "" {
+			ga, _ := cmd.Flags().GetString("group-a")
+			gb, _ := cmd.Flags().GetString("group-b")
+
+			campaignMode := a != "" || b != ""
+			groupMode := ga != "" || gb != ""
+			if campaignMode && groupMode {
+				return errors.New("--a/--b and --group-a/--group-b are mutually exclusive")
+			}
+			if !campaignMode && !groupMode {
+				return errors.New("provide --a and --b (campaigns) or --group-a and --group-b (campaign groups)")
+			}
+			if campaignMode && (a == "" || b == "") {
 				return errors.New("--a and --b campaign ids required")
 			}
+			if groupMode && (ga == "" || gb == "") {
+				return errors.New("--group-a and --group-b campaign group ids required")
+			}
+
 			metric, _ := cmd.Flags().GetString("metric")
 			metric = strings.ToLower(metric)
 			if metric == "" {
@@ -318,43 +333,63 @@ func newAnalyticsCompareCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			end := time.Now().UTC()
-			start := end.AddDate(0, 0, -30)
+			start, end, err := parseDateRange(cmd)
+			if err != nil {
+				return err
+			}
 
 			ctx := cmd.Context()
 			var (
-				rowsA, rowsB []api.AnalyticsRow
-				errA, errB   error
-				wg           sync.WaitGroup
+				rowsA, rowsB   []api.AnalyticsRow
+				errA, errB     error
+				wg             sync.WaitGroup
+				labelA, labelB string
 			)
 			wg.Add(2)
-			go func() {
-				defer wg.Done()
-				rowsA, errA = api.GetSingleCampaignAnalytics(ctx, c, a, start, end)
-			}()
-			go func() {
-				defer wg.Done()
-				rowsB, errB = api.GetSingleCampaignAnalytics(ctx, c, b, start, end)
-			}()
+			if campaignMode {
+				labelA, labelB = a, b
+				go func() {
+					defer wg.Done()
+					rowsA, errA = api.GetSingleCampaignAnalytics(ctx, c, a, start, end)
+				}()
+				go func() {
+					defer wg.Done()
+					rowsB, errB = api.GetSingleCampaignAnalytics(ctx, c, b, start, end)
+				}()
+			} else {
+				labelA, labelB = ga, gb
+				go func() {
+					defer wg.Done()
+					rowsA, errA = api.GetSingleCampaignGroupAnalytics(ctx, c, ga, start, end)
+				}()
+				go func() {
+					defer wg.Done()
+					rowsB, errB = api.GetSingleCampaignGroupAnalytics(ctx, c, gb, start, end)
+				}()
+			}
 			wg.Wait()
 			if errA != nil {
-				return fmt.Errorf("campaign %s: %w", a, errA)
+				return fmt.Errorf("entity %s: %w", labelA, errA)
 			}
 			if errB != nil {
-				return fmt.Errorf("campaign %s: %w", b, errB)
+				return fmt.Errorf("entity %s: %w", labelB, errB)
 			}
 			return writeOutput(cmd, map[string]any{
 				"a":      rowsA,
 				"b":      rowsB,
 				"metric": metric,
 			}, func() string {
-				return formatCompare(a, b, rowsA, rowsB, metric)
+				return formatCompare(labelA, labelB, rowsA, rowsB, metric)
 			})
 		},
 	}
 	cmd.Flags().String("a", "", "First campaign id")
 	cmd.Flags().String("b", "", "Second campaign id")
+	cmd.Flags().String("group-a", "", "First campaign group id (mutually exclusive with --a/--b)")
+	cmd.Flags().String("group-b", "", "Second campaign group id")
 	cmd.Flags().String("metric", "spend", "spend, impressions, clicks, ctr, or cpc")
+	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
+	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd
 }
 

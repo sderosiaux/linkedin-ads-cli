@@ -222,6 +222,33 @@ func TestAnalyticsRow_VideoMetrics(t *testing.T) {
 	}
 }
 
+func TestGetSingleCampaignGroupAnalytics(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":500,"clicks":25,"costInUsd":"15.00"}]}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetSingleCampaignGroupAnalytics(context.Background(), c, "99", start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Impressions != 500 {
+		t.Errorf("rows: %+v", rows)
+	}
+	if !strings.Contains(gotRaw, "pivot=CAMPAIGN_GROUP") {
+		t.Errorf("missing pivot: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "campaignGroups=List(urn%3Ali%3AsponsoredCampaignGroup%3A99)") {
+		t.Errorf("missing campaignGroups: %s", gotRaw)
+	}
+}
+
 func TestGetDailyTrendsAnalytics_CampaignScope(t *testing.T) {
 	t.Parallel()
 	var gotRaw string

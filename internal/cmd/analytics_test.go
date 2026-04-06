@@ -361,6 +361,97 @@ func TestAnalyticsCompare_TwoCampaigns(t *testing.T) {
 	}
 }
 
+func TestAnalyticsCompare_CustomDates(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "dateRange=(start:(year:2026,month:2,day:1),end:(year:2026,month:2,day:28))") {
+			t.Errorf("dateRange wrong: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":50,"clicks":5,"costInUsd":"2"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "compare",
+		"--a", "1", "--b", "2",
+		"--start", "2026-02-01", "--end", "2026-02-28",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAnalyticsCompare_Groups(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=CAMPAIGN_GROUP") {
+			t.Errorf("missing CAMPAIGN_GROUP pivot: %s", raw)
+		}
+		if !strings.Contains(raw, "campaignGroups=List(") {
+			t.Errorf("missing campaignGroups: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":100,"clicks":10,"costInUsd":"5"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "compare",
+		"--group-a", "10", "--group-b", "20",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "10") || !strings.Contains(s, "20") {
+		t.Errorf("expected group labels, got: %s", s)
+	}
+}
+
+func TestAnalyticsCompare_MutualExclusion(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath,
+		"analytics", "compare",
+		"--a", "1", "--b", "2", "--group-a", "10", "--group-b", "20",
+	})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error for mutual exclusion")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive hint, got: %v", err)
+	}
+}
+
 func TestAnalyticsCampaigns_BadDate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

@@ -82,6 +82,15 @@ func GetSingleCampaignAnalytics(ctx context.Context, c *client.Client, campaignI
 	return decodeAnalytics(ctx, c, raw)
 }
 
+// GetSingleCampaignGroupAnalytics returns rolled-up analytics for a single
+// campaign group. Used by `analytics compare --group-a / --group-b`.
+func GetSingleCampaignGroupAnalytics(ctx context.Context, c *client.Client, groupID string, start, end time.Time) ([]AnalyticsRow, error) {
+	groupURN := EncodeURNForList(urn.Wrap(urn.CampaignGroup, groupID))
+	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN_GROUP&timeGranularity=ALL&dateRange=%s&campaignGroups=List(%s)",
+		formatDateRange(start, end), groupURN)
+	return decodeAnalytics(ctx, c, raw)
+}
+
 // GetDailyTrendsAnalytics returns rows with timeGranularity=DAILY scoped to
 // either an account (when accountID is set) or a single campaign (when
 // campaignID is set). Exactly one of the two should be non-empty; if both are
