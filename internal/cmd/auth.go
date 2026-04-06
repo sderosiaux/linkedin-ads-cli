@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -52,7 +53,23 @@ func newAuthLoginCmd() *cobra.Command {
 			if err := config.Save(path, c); err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "✓ Token saved.")
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "✓ Token saved."); err != nil {
+				return err
+			}
+			// Best-effort verification: list accessible accounts. The login is
+			// not rolled back if this fails — the user may want to save a
+			// token and verify later.
+			client, _, err := clientFromConfig(cmd)
+			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not list accounts (%s). Token may be invalid; verify later with 'linkedin-ads accounts'.\n", err)
+				return nil
+			}
+			accounts, err := api.ListAccounts(cmd.Context(), client, 0)
+			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not list accounts (%s). Token may be invalid; verify later with 'linkedin-ads accounts'.\n", err)
+				return nil
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%d ad accounts accessible. Run 'linkedin-ads use-account <id>' to set a default.\n", len(accounts))
 			return err
 		},
 	}

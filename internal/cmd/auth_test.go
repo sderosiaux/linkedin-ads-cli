@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,14 +13,27 @@ import (
 )
 
 func TestAuthLogin_FlagToken_WritesConfig(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/adAccounts" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"elements":[
+			{"id":1,"name":"A","status":"ACTIVE"},
+			{"id":2,"name":"B","status":"ACTIVE"},
+			{"id":3,"name":"C","status":"ACTIVE"}
+		],"paging":{"start":0,"count":3,"total":3}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
 	root := NewRootCmd()
-	out := &bytes.Buffer{}
-	root.SetOut(out)
-	root.SetErr(out)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
 	root.SetArgs([]string{"--config", cfgPath, "auth", "login", "--token", "AQX_abc"})
 
 	if err := root.Execute(); err != nil {
@@ -44,8 +59,53 @@ func TestAuthLogin_FlagToken_WritesConfig(t *testing.T) {
 		t.Errorf("perms: %v", info.Mode().Perm())
 	}
 
-	if !strings.Contains(out.String(), "Token saved") {
-		t.Errorf("expected 'Token saved' in output, got: %s", out.String())
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(combined, "Token saved") {
+		t.Errorf("expected 'Token saved' in output, got: %s", combined)
+	}
+	if !strings.Contains(combined, "3 ad accounts accessible") {
+		t.Errorf("expected '3 ad accounts accessible' in output, got: %s", combined)
+	}
+}
+
+func TestAuthLogin_AccountListFails_StillSaves(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"status":401,"code":"UNAUTHORIZED","message":"bad token"}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	root := NewRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"--config", cfgPath, "auth", "login", "--token", "AQX_bad"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("login should succeed even when verification fails: %v", err)
+	}
+
+	c, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if c.Token != "AQX_bad" {
+		t.Errorf("token not saved: %q", c.Token)
+	}
+
+	if !strings.Contains(stdout.String(), "Token saved") {
+		t.Errorf("expected 'Token saved' in stdout, got: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "warning") {
+		t.Errorf("expected warning in stderr, got: %s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "could not list accounts") {
+		t.Errorf("expected 'could not list accounts' in stderr, got: %s", stderr.String())
 	}
 }
 
