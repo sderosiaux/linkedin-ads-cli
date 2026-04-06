@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: format, compile, lint.
+# Fails the commit if any step fails.
+# Install with: make install-hooks
+
+set -euo pipefail
+
+# Only run on Go changes
+staged_go=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.go$' || true)
+if [ -z "$staged_go" ]; then
+    exit 0
+fi
+
+echo "pre-commit: gofumpt (auto-fix)"
+if command -v gofumpt >/dev/null 2>&1; then
+    gofumpt -l -w .
+else
+    echo "  gofumpt not found — install with: go install mvdan.cc/gofumpt@latest" >&2
+    exit 1
+fi
+
+# Re-stage any files gofumpt rewrote (only files already staged, to avoid surprises)
+for f in $staged_go; do
+    if [ -f "$f" ]; then
+        git add "$f"
+    fi
+done
+
+echo "pre-commit: go build"
+if ! go build ./...; then
+    echo "  build failed — commit aborted" >&2
+    exit 1
+fi
+
+echo "pre-commit: go vet"
+if ! go vet ./...; then
+    echo "  vet failed — commit aborted" >&2
+    exit 1
+fi
+
+echo "pre-commit: golangci-lint run"
+if ! command -v golangci-lint >/dev/null 2>&1; then
+    echo "  golangci-lint not found — install with: brew install golangci-lint" >&2
+    exit 1
+fi
+if ! golangci-lint run; then
+    echo "  lint failed — commit aborted" >&2
+    exit 1
+fi
+
+echo "pre-commit: go mod tidy check"
+go mod tidy
+if ! git diff --exit-code go.mod go.sum >/dev/null; then
+    echo "  go.mod/go.sum not tidy — commit aborted" >&2
+    echo "  run 'go mod tidy' and stage the result" >&2
+    exit 1
+fi
+
+echo "pre-commit: ok"

@@ -182,6 +182,16 @@ internal/
 
 Go 1.22, [cobra](https://github.com/spf13/cobra), `gopkg.in/yaml.v3`, `golang.org/x/term`. Built and released with [goreleaser](https://goreleaser.com/), linted with [golangci-lint](https://golangci-lint.run/) v2.
 
+## Contributing
+
+After cloning, install the pre-commit hook once:
+
+```bash
+make install-hooks
+```
+
+The hook runs `gofumpt`, `go build`, `go vet`, `golangci-lint run`, and `go mod tidy` on every commit. It aborts the commit on any failure. Required tools: `gofumpt`, `golangci-lint`.
+
 ## License
 
 [MIT](LICENSE).

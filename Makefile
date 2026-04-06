@@ -1,4 +1,4 @@
-.PHONY: build test lint check fmt vet tidy clean
+.PHONY: build test lint check fmt vet tidy clean install-hooks
 
 build:
 	go build -o linkedin-ads ./cmd/linkedin-ads
@@ -24,3 +24,7 @@ clean:
 	rm -rf dist/
 
 check: tidy vet lint test
+
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks installed from .githooks/"
