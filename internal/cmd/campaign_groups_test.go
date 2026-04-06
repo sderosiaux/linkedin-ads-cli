@@ -165,7 +165,7 @@ func TestCampaignGroupsList_ResolveJSON(t *testing.T) {
 	out := &bytes.Buffer{}
 	root.SetOut(out)
 	root.SetErr(out)
-	root.SetArgs([]string{"--config", cfgPath, "--json", "--resolve", "campaign-groups", "list"})
+	root.SetArgs([]string{"--config", cfgPath, "--json", "campaign-groups", "list", "--resolve"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\noutput: %s", err, out.String())
 	}

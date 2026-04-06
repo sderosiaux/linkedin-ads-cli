@@ -21,7 +21,6 @@ func NewRootCmd() *cobra.Command {
 	root.PersistentFlags().Bool("json", false, "Output as JSON (LLM/scripts)")
 	root.PersistentFlags().Bool("compact", false, "Minimal JSON fields (requires --json)")
 	root.PersistentFlags().Int("limit", 0, "Cap array results at N items")
-	root.PersistentFlags().Bool("resolve", false, "Enrich URN references with human names")
 	root.PersistentFlags().Bool("dry-run", false, "Print the request that would be sent without executing it")
 	root.PersistentFlags().Bool("yes", false, "Skip confirmation prompts")
 	root.AddCommand(

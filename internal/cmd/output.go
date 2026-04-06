@@ -79,9 +79,14 @@ func writeJSON(cmd *cobra.Command, data any) error {
 	return nil
 }
 
-// resolveFlag returns the value of the global --resolve flag.
+// resolveFlag returns the value of the local --resolve flag for the command.
+// Only commands that wire this flag (campaigns list, campaign-groups list)
+// will see a non-false value.
 func resolveFlag(cmd *cobra.Command) bool {
-	b, _ := cmd.Root().PersistentFlags().GetBool("resolve")
+	b, err := cmd.Flags().GetBool("resolve")
+	if err != nil {
+		return false
+	}
 	return b
 }
 

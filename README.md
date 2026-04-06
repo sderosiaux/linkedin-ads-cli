@@ -94,12 +94,13 @@ Every read command supports `--json` for structured output. Every write command 
 | `--json` | Structured JSON output for LLM/script consumption |
 | `--compact` | Minimal JSON fields. Pairs with `--json`. |
 | `--limit N` | Cap array results at N items |
-| `--resolve` | Enrich URN references with human names (cached per run) |
 | `--dry-run` | Print the request that would be sent without executing it |
 | `--yes` | Skip confirmation prompts on writes |
 | `--config <path>` | Override config file path (default `~/.config/linkedin-ads/config.yaml`) |
 
 Account-scoped commands also accept `--account <id>` to override the default for a single call.
+
+`--resolve` is a per-command flag, not global. It is wired on `campaigns list` and `campaign-groups list` and only takes effect together with `--json`.
 
 ## Examples
 
@@ -147,10 +148,10 @@ linkedin-ads campaigns update 12345 --status PAUSED --dry-run
 linkedin-ads campaigns update 12345 --status PAUSED --yes
 ```
 
-Resolve URNs to human names in any read command:
+Enrich campaignGroup URNs with names (JSON envelope under `_resolved`):
 
 ```bash
-linkedin-ads campaigns list --resolve --json
+linkedin-ads campaigns list --json --resolve
 ```
 
 ## Architecture
@@ -175,7 +176,7 @@ internal/
 - Retry with exponential backoff on 429 and 5xx.
 - Token stored at `~/.config/linkedin-ads/config.yaml` with mode `0600`. The `config show` command masks it.
 - Writes prompt for confirmation. `--dry-run` prints the request without sending it. `--yes` skips the prompt.
-- URN resolution is opt-in via `--resolve` and cached for the duration of a single command.
+- URN resolution is opt-in via `--resolve` on `campaigns list` and `campaign-groups list`. Resolution requires `--json` and the lookup cache lives for the duration of a single command.
 
 ## Stack
 

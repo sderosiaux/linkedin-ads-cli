@@ -56,8 +56,9 @@ func newCampaignGroupsListCmd() *cobra.Command {
 				}
 				groups = filtered
 			}
+			jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
 			var resolved map[string]string
-			if resolveFlag(cmd) {
+			if jsonOut && resolveFlag(cmd) {
 				urns := uniqueAccountURNs(groups)
 				resolved = resolve.New(c).ResolveAll(cmd.Context(), urns)
 			}
@@ -74,6 +75,7 @@ func newCampaignGroupsListCmd() *cobra.Command {
 	}
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
 	cmd.Flags().String("status", "", "Filter by status (ACTIVE, DRAFT, ...)")
+	cmd.Flags().Bool("resolve", false, "Enrich account URNs with names (--json only)")
 	return cmd
 }
 
