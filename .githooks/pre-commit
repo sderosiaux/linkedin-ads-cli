@@ -12,15 +12,14 @@ if [ -z "$staged_go" ]; then
     exit 0
 fi
 
-echo "pre-commit: gofumpt (auto-fix)"
-if command -v gofumpt >/dev/null 2>&1; then
-    gofumpt -l -w .
-else
-    echo "  gofumpt not found — install with: go install mvdan.cc/gofumpt@latest" >&2
+echo "pre-commit: format (auto-fix via golangci-lint fmt)"
+if ! command -v golangci-lint >/dev/null 2>&1; then
+    echo "  golangci-lint not found — install with: brew install golangci-lint" >&2
     exit 1
 fi
+golangci-lint fmt
 
-# Re-stage any files gofumpt rewrote (only files already staged, to avoid surprises)
+# Re-stage any files the formatter rewrote (only files already staged)
 for f in $staged_go; do
     if [ -f "$f" ]; then
         git add "$f"
@@ -40,10 +39,6 @@ if ! go vet ./...; then
 fi
 
 echo "pre-commit: golangci-lint run"
-if ! command -v golangci-lint >/dev/null 2>&1; then
-    echo "  golangci-lint not found — install with: brew install golangci-lint" >&2
-    exit 1
-fi
 if ! golangci-lint run; then
     echo "  lint failed — commit aborted" >&2
     exit 1

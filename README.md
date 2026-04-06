@@ -190,7 +190,7 @@ After cloning, install the pre-commit hook once:
 make install-hooks
 ```
 
-The hook runs `gofumpt`, `go build`, `go vet`, `golangci-lint run`, and `go mod tidy` on every commit. It aborts the commit on any failure. Required tools: `gofumpt`, `golangci-lint`.
+The hook runs `golangci-lint fmt` (auto-fix), `go build`, `go vet`, `golangci-lint run`, and `go mod tidy` on every commit touching `.go` files. It aborts the commit on any failure. Required tool: `golangci-lint` (v2+).
 
 ## License
 
