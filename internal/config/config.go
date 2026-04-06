@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -51,4 +52,20 @@ func Save(path string, c *Config) error {
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "linkedin-ads", "config.yaml")
+}
+
+// CheckPerms returns a non-empty warning string when path exists and has any
+// permission bits looser than 0600 (i.e. any group or world bits set).
+// Returns "" when the file is missing, unreadable, or already 0600.
+// Callers should print the warning to stderr without aborting.
+func CheckPerms(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	perm := info.Mode().Perm()
+	if perm&^0o600 == 0 {
+		return ""
+	}
+	return fmt.Sprintf("warning: %s has permissions %#o (expected 0600). Fix with: chmod 600 %s", path, perm, path)
 }

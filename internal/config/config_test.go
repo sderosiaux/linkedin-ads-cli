@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +65,40 @@ func TestSaveCreatesParentDirWith0700(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o700 {
 		t.Fatalf("expected parent 0700, got %v", info.Mode().Perm())
+	}
+}
+
+func TestCheckPerms_TooLoose(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "loose.yaml")
+	if err := os.WriteFile(path, []byte("token: x\n"), 0o644); err != nil { //nolint:gosec // intentionally loose for the test
+		t.Fatal(err)
+	}
+	w := CheckPerms(path)
+	if w == "" {
+		t.Fatal("expected warning for 0644 file")
+	}
+	if !strings.Contains(w, "0600") || !strings.Contains(w, path) {
+		t.Errorf("warning should mention 0600 and path, got: %q", w)
+	}
+}
+
+func TestCheckPerms_Tight(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tight.yaml")
+	if err := os.WriteFile(path, []byte("token: x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if w := CheckPerms(path); w != "" {
+		t.Errorf("expected no warning for 0600, got: %q", w)
+	}
+}
+
+func TestCheckPerms_Missing(t *testing.T) {
+	t.Parallel()
+	if w := CheckPerms(filepath.Join(t.TempDir(), "nope.yaml")); w != "" {
+		t.Errorf("expected no warning for missing file, got: %q", w)
 	}
 }

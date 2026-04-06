@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
@@ -22,6 +23,9 @@ const defaultBaseURL = "https://api.linkedin.com/rest"
 // is a test-only hook and is intentionally not advertised in --help.
 func clientFromConfig(cmd *cobra.Command) (*client.Client, *config.Config, error) {
 	path := configPathFrom(cmd)
+	if warning := config.CheckPerms(path); warning != "" {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	c, err := config.Load(path)
 	if err != nil {
 		return nil, nil, err
