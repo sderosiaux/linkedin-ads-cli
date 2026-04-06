@@ -5,9 +5,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
+
+// scopeRegex extracts the missing scope from a 403 error message. LinkedIn's
+// wording varies across endpoints — this is a best-effort match against the
+// most common shapes ("scope: foo", "required permissions: foo", etc.).
+var scopeRegex = regexp.MustCompile(`(?i)(?:scope|required ?permissions?|needs)[: ]+([\w_,\s]+)`)
+
+// extractScope returns the trimmed scope hint embedded in a LinkedIn 403
+// message, or "" when no recognisable token is present.
+func extractScope(message string) string {
+	m := scopeRegex.FindStringSubmatch(message)
+	if len(m) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
+}
 
 // APIError is the parsed LinkedIn API error envelope. LinkedIn returns errors
 // as JSON like:
@@ -36,7 +53,14 @@ func (e *APIError) Error() string {
 	case http.StatusUnauthorized:
 		return base + " — run 'linkedin-ads auth login' to refresh your token"
 	case http.StatusForbidden:
-		return base + " — token is missing the required scope for this endpoint"
+		hint := " — token is missing the required scope for this endpoint"
+		if scope := extractScope(e.Message); scope != "" {
+			hint = fmt.Sprintf(" — missing scope: %s", scope)
+		}
+		if e.ServiceErrorCode != 0 {
+			return fmt.Sprintf("%s (serviceErrorCode: %d)%s", base, e.ServiceErrorCode, hint)
+		}
+		return base + hint
 	case http.StatusTooManyRequests:
 		if e.RetryAfter > 0 {
 			return fmt.Sprintf("%s — Retry-After: %s", base, e.RetryAfter)
