@@ -53,6 +53,12 @@ func New(o Options) *Client {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
+	return c.doWithHeaders(ctx, method, path, query, body, nil)
+}
+
+// doWithHeaders is the shared transport loop. extraHeaders are merged on top of
+// the standard auth/version headers and override Content-Type if present.
+func (c *Client) doWithHeaders(ctx context.Context, method, path string, query url.Values, body any, extraHeaders map[string]string) (*http.Response, error) {
 	u, err := url.Parse(c.base + path)
 	if err != nil {
 		return nil, err
@@ -85,6 +91,9 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		if bodyBytes != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
 
 		resp, err = c.http.Do(req)
 		if err != nil {
@@ -115,6 +124,56 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 		return parseError(resp)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// PostJSON sends a POST with a JSON body. If out is non-nil and the response
+// has a body, the body is decoded into it. Returns the X-LinkedIn-Id header
+// value (the new resource id) when present.
+func (c *Client) PostJSON(ctx context.Context, path string, body, out any) (string, error) {
+	resp, err := c.do(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return "", parseError(resp)
+	}
+	newID := resp.Header.Get("X-LinkedIn-Id")
+	if out != nil && resp.ContentLength != 0 {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return newID, err
+		}
+	}
+	return newID, nil
+}
+
+// PartialUpdate sends a Rest.li 2.0 partial update: an HTTP POST carrying the
+// X-RestLi-Method: PARTIAL_UPDATE header. Body should be {"patch":{"$set":...}}.
+func (c *Client) PartialUpdate(ctx context.Context, path string, body any) error {
+	resp, err := c.doWithHeaders(ctx, http.MethodPost, path, nil, body, map[string]string{
+		"X-RestLi-Method": "PARTIAL_UPDATE",
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return parseError(resp)
+	}
+	return nil
+}
+
+// Delete sends a DELETE request. Returns nil on any 2xx response.
+func (c *Client) Delete(ctx context.Context, path string) error {
+	resp, err := c.do(ctx, http.MethodDelete, path, nil, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return parseError(resp)
+	}
+	return nil
 }
 
 // GetJSONRawQuery is like GetJSON but takes an already-encoded query string
