@@ -293,7 +293,7 @@ func newCampaignGroupsUpdateCmd() *cobra.Command {
 func newCampaignGroupsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
-		Short: "Delete a campaign group",
+		Short: "Delete a campaign group (DRAFT: hard-delete; otherwise: set PENDING_DELETION)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, cfg, err := clientFromConfig(cmd)
@@ -304,12 +304,35 @@ func newCampaignGroupsDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			summary := fmt.Sprintf("DELETE /adAccounts/%s/adCampaignGroups/%s", accountID, args[0])
-			return executeWrite(cmd, summary, map[string]any{"id": args[0]}, func() error {
-				if err := api.DeleteCampaignGroup(cmd.Context(), c, accountID, args[0]); err != nil {
+			id := args[0]
+
+			// Fetch current state to decide hard-delete vs soft-delete.
+			current, err := api.GetCampaignGroup(cmd.Context(), c, accountID, id)
+			if err != nil {
+				return err
+			}
+			isDraft := current.Status == "DRAFT"
+
+			if isDraft {
+				summary := fmt.Sprintf("DELETE /adAccounts/%s/adCampaignGroups/%s", accountID, id)
+				return executeWrite(cmd, summary, map[string]any{"id": id}, func() error {
+					if err := api.DeleteCampaignGroup(cmd.Context(), c, accountID, id); err != nil {
+						return err
+					}
+					_, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted campaign group %s\n", id)
+					return err
+				})
+			}
+
+			status := "PENDING_DELETION"
+			in := &api.UpdateCampaignGroupInput{Status: &status}
+			payload := map[string]any{"patch": map[string]any{"$set": in}}
+			summary := fmt.Sprintf("POST /adAccounts/%s/adCampaignGroups/%s (soft-delete)", accountID, id)
+			return executeWrite(cmd, summary, payload, func() error {
+				if err := api.UpdateCampaignGroup(cmd.Context(), c, accountID, id, in); err != nil {
 					return err
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted campaign group %s\n", args[0])
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Campaign group %s set to PENDING_DELETION (non-draft cannot be hard-deleted)\n", id)
 				return err
 			})
 		},

@@ -74,7 +74,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaign-groups", "delete", "111",
 			},
-			want: "DELETE /adAccounts/12345/adCampaignGroups/111",
+			want: "POST /adAccounts/12345/adCampaignGroups/111 (soft-delete)",
 		},
 		{
 			name: "campaigns create",
@@ -101,7 +101,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaigns", "delete", "10",
 			},
-			want: "DELETE /adAccounts/12345/adCampaigns/10",
+			want: "POST /adAccounts/12345/adCampaigns/10 (soft-delete)",
 		},
 	}
 	for _, tc := range cases {

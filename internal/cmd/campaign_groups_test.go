@@ -497,9 +497,13 @@ func TestCampaignGroupsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 	}
 }
 
-func TestCampaignGroupsDelete_YesPath(t *testing.T) {
+func TestCampaignGroupsDelete_YesPath_Draft(t *testing.T) {
 	var gotMethod, gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/123" {
+			_, _ = w.Write([]byte(`{"id":123,"name":"Draft CG","status":"DRAFT","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		w.WriteHeader(http.StatusNoContent)
@@ -526,9 +530,54 @@ func TestCampaignGroupsDelete_YesPath(t *testing.T) {
 	}
 }
 
+func TestCampaignGroupsDelete_YesPath_NonDraft(t *testing.T) {
+	var gotRestliMethod string
+	var gotBodyRaw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/123" {
+			_, _ = w.Write([]byte(`{"id":123,"name":"Active CG","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
+		gotRestliMethod = r.Header.Get("X-RestLi-Method")
+		gotBodyRaw, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--yes", "campaign-groups", "delete", "123"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	if gotRestliMethod != "PARTIAL_UPDATE" {
+		t.Errorf("expected PARTIAL_UPDATE, got %q", gotRestliMethod)
+	}
+	if !strings.Contains(string(gotBodyRaw), "PENDING_DELETION") {
+		t.Errorf("expected PENDING_DELETION in body: %s", string(gotBodyRaw))
+	}
+	if !strings.Contains(out.String(), "PENDING_DELETION") {
+		t.Errorf("expected PENDING_DELETION note in output: %s", out.String())
+	}
+}
+
 func TestCampaignGroupsDelete_DryRun(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call HTTP, got %s %s", r.Method, r.URL.Path)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Delete now fetches current state first (GET allowed in dry-run).
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/123" {
+			_, _ = w.Write([]byte(`{"id":123,"name":"Draft CG","status":"DRAFT","account":"urn:li:sponsoredAccount:777"}`))
+			return
+		}
+		t.Fatalf("dry-run should not call HTTP write, got %s %s", r.Method, r.URL.Path)
 	}))
 	defer srv.Close()
 	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
