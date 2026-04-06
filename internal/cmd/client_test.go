@@ -1,0 +1,106 @@
+package cmd
+
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
+)
+
+func TestClientFromConfig_MissingTokenErrors(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{}); err != nil {
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := clientFromConfig(root)
+	if err == nil {
+		t.Fatal("expected error for missing token")
+	}
+	if !strings.Contains(err.Error(), "auth login") {
+		t.Errorf("error should guide user to 'auth login', got: %v", err)
+	}
+}
+
+func TestClientFromConfig_ReturnsConfiguredClient(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{
+		Token:          "AQX", //nolint:gosec // test fixture, not a real token
+		DefaultAccount: "42",
+		APIVersion:     "202601",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	cli, cfg, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if cli == nil {
+		t.Fatal("nil client")
+	}
+	if cfg.DefaultAccount != "42" {
+		t.Errorf("account: %q", cfg.DefaultAccount)
+	}
+}
+
+func TestClientFromConfig_DefaultsAPIVersion(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, cfg, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APIVersion == "" {
+		t.Error("APIVersion should be defaulted")
+	}
+}
+
+func TestClientFromConfig_BaseURLEnvOverride(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	t.Setenv("LINKEDIN_ADS_BASE_URL", "http://example.invalid")
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	cli, _, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cli == nil {
+		t.Fatal("nil client")
+	}
+}
