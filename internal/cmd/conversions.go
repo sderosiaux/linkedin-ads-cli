@@ -13,7 +13,7 @@ func newConversionsCmd() *cobra.Command {
 		Use:   "conversions",
 		Short: "List conversion definitions",
 	}
-	root.AddCommand(newConversionsListCmd())
+	root.AddCommand(newConversionsListCmd(), newConversionsPerformanceCmd())
 	return root
 }
 
@@ -47,5 +47,44 @@ func newConversionsListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
+	return cmd
+}
+
+func newConversionsPerformanceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "performance",
+		Short: "Conversion performance breakdown over a date range (default: last 30 days)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			start, end, err := parseDateRange(cmd)
+			if err != nil {
+				return err
+			}
+			rows, err := api.GetConversionPerformance(cmd.Context(), c, accountID, start, end)
+			if err != nil {
+				return err
+			}
+			return writeOutput(cmd, rows, func() string {
+				var b strings.Builder
+				b.WriteString("CONVERSION                              IMPRESSIONS   CLICKS   CONV    COST\n")
+				for _, r := range rows {
+					fmt.Fprintf(&b, "%-40s %11d %8d %7d %s\n",
+						truncate(r.Conversion, 40), r.Impressions, r.Clicks, r.Conversions, r.CostInUsd)
+				}
+				return b.String()
+			})
+		},
+	}
+	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
+	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
+	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd
 }
