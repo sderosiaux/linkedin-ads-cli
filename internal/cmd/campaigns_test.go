@@ -15,7 +15,7 @@ import (
 
 func TestCampaignsList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaigns" {
+		if r.URL.Path != "/adAccounts/777/adCampaigns" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -31,7 +31,7 @@ func TestCampaignsList_JSON(t *testing.T) {
 					"costType":      "CPC",
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -59,7 +59,7 @@ func TestCampaignsList_JSON(t *testing.T) {
 
 func TestCampaignsList_EmptyState_Terminal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -107,7 +107,7 @@ func TestCampaignsList_Compact(t *testing.T) {
 					"dailyBudget":   map[string]any{"amount": "100", "currencyCode": "USD"},
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -143,7 +143,7 @@ func TestCampaignsList_Compact(t *testing.T) {
 
 func TestCampaignsBare_DelegatesToList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaigns" {
+		if r.URL.Path != "/adAccounts/777/adCampaigns" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -159,7 +159,7 @@ func TestCampaignsBare_DelegatesToList(t *testing.T) {
 					"costType":      "CPC",
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -188,11 +188,14 @@ func TestCampaignsBare_DelegatesToList(t *testing.T) {
 
 func TestCampaignsList_GroupFilter(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		search := r.URL.Query().Get("search")
-		if !strings.Contains(search, "urn:li:sponsoredCampaignGroup:99") {
-			t.Errorf("expected group filter, got: %q", search)
+		if r.URL.Path != "/adAccounts/777/adCampaigns" {
+			t.Errorf("path: %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+		q := r.URL.Query()
+		if q.Get("search.campaignGroup.values[0]") != "urn:li:sponsoredCampaignGroup:99" {
+			t.Errorf("expected group filter, got q: %q", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -217,11 +220,11 @@ func TestCampaignsList_GroupFilter(t *testing.T) {
 func TestCampaignsList_ResolveJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/adCampaigns":
+		case r.URL.Path == "/adAccounts/777/adCampaigns":
 			_, _ = w.Write([]byte(`{"elements":[
 				{"id":10,"name":"C1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"},
 				{"id":11,"name":"C2","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}
-			],"paging":{"start":0,"count":2,"total":2}}`))
+			],"metadata":{}}`))
 		case strings.HasPrefix(r.URL.Path, "/adCampaignGroups/111"):
 			_, _ = w.Write([]byte(`{"id":111,"name":"Q1 Push","status":"ACTIVE"}`))
 		default:
@@ -291,7 +294,7 @@ func TestCampaignsCreate_DryRun(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "POST /adCampaigns") {
+	if !strings.Contains(out.String(), "POST /adAccounts/777/adCampaigns") {
 		t.Errorf("expected POST summary in dry-run output: %s", out.String())
 	}
 	if !strings.Contains(out.String(), `"campaignGroup": "urn:li:sponsoredCampaignGroup:678"`) {
@@ -335,7 +338,7 @@ func TestCampaignsCreate_YesPath(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaigns" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/777/adCampaigns" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotBody["status"] != "DRAFT" || gotBody["costType"] != "CPM" {
@@ -350,7 +353,7 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 	var gotMethod, gotPath, gotRestliMethod string
 	var gotBodyRaw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaigns/10" {
 			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
 			return
 		}
@@ -365,7 +368,7 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -380,7 +383,7 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaigns/10" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/777/adCampaigns/10" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotRestliMethod != "PARTIAL_UPDATE" {
@@ -395,11 +398,11 @@ func TestCampaignsUpdate_OnlyStatus(t *testing.T) {
 func TestCampaignsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 	var gotPatch bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaigns/10" {
 			_, _ = w.Write([]byte(`{"id":10,"name":"Old Name","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC","dailyBudget":{"amount":"50","currencyCode":"USD"}}`))
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/adCampaigns/10" {
+		if r.Method == http.MethodPost && r.URL.Path == "/adAccounts/777/adCampaigns/10" {
 			gotPatch = true
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -411,7 +414,7 @@ func TestCampaignsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -449,7 +452,7 @@ func TestCampaignsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 
 func TestCampaignsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaigns/10" {
 			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
 			return
 		}
@@ -462,7 +465,7 @@ func TestCampaignsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -484,7 +487,7 @@ func TestCampaignsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 
 func TestCampaignsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaigns/10" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaigns/10" {
 			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
 			return
 		}
@@ -495,7 +498,7 @@ func TestCampaignsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -510,7 +513,7 @@ func TestCampaignsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "POST /adCampaigns/10") {
+	if !strings.Contains(out.String(), "POST /adAccounts/777/adCampaigns/10") {
 		t.Errorf("expected summary in dry-run output: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "status: PAUSED  →  ACTIVE") {
@@ -533,7 +536,7 @@ func TestCampaignsDelete_YesPath(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -545,7 +548,7 @@ func TestCampaignsDelete_YesPath(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodDelete || gotPath != "/adCampaigns/10" {
+	if gotMethod != http.MethodDelete || gotPath != "/adAccounts/777/adCampaigns/10" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 }
@@ -559,7 +562,7 @@ func TestCampaignsDelete_DryRun(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -571,14 +574,14 @@ func TestCampaignsDelete_DryRun(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "DELETE /adCampaigns/10") {
+	if !strings.Contains(out.String(), "DELETE /adAccounts/777/adCampaigns/10") {
 		t.Errorf("expected summary in dry-run output: %s", out.String())
 	}
 }
 
 func TestCampaignsGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaigns/10" {
+		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
@@ -589,7 +592,7 @@ func TestCampaignsGet_JSON(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 

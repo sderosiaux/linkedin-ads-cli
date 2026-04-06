@@ -23,7 +23,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 			switch r.URL.Path {
 			case "/adAccounts/12345/adCampaignGroups/111":
 				_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:12345"}`))
-			case "/adCampaigns/10":
+			case "/adAccounts/12345/adCampaigns/10":
 				_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:12345","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
 			default:
 				t.Errorf("unexpected GET %s", r.URL.Path)
@@ -85,7 +85,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--currency", "USD", "--objective", "BRAND_AWARENESS",
 				"--type", "SPONSORED_UPDATES",
 			},
-			want: "POST /adCampaigns",
+			want: "POST /adAccounts/12345/adCampaigns",
 		},
 		{
 			name: "campaigns update",
@@ -93,7 +93,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaigns", "update", "10", "--status", "ACTIVE",
 			},
-			want: "POST /adCampaigns/10",
+			want: "POST /adAccounts/12345/adCampaigns/10",
 		},
 		{
 			name: "campaigns delete",
@@ -101,7 +101,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaigns", "delete", "10",
 			},
-			want: "DELETE /adCampaigns/10",
+			want: "DELETE /adAccounts/12345/adCampaigns/10",
 		},
 	}
 	for _, tc := range cases {

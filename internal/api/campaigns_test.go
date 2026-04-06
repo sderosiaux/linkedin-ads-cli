@@ -15,19 +15,18 @@ import (
 func TestListCampaigns_AccountOnly(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaigns" {
+		if r.URL.Path != "/adAccounts/12345/adCampaigns" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "q=search") {
-			t.Errorf("RawQuery missing q=search: %q", raw)
+		q := r.URL.Query()
+		if q.Get("q") != "search" {
+			t.Errorf("q: %q", q.Get("q"))
 		}
-		wantTuple := "search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
-		if !strings.Contains(raw, wantTuple) {
-			t.Errorf("RawQuery missing unescaped tuple %q: %q", wantTuple, raw)
-		}
-		if strings.Contains(raw, "campaignGroup") {
-			t.Errorf("RawQuery should NOT contain campaignGroup when no group passed: %q", raw)
+		// No campaign group filter when groupID is empty.
+		for k := range q {
+			if strings.HasPrefix(k, "search.campaignGroup") {
+				t.Errorf("query should NOT contain campaignGroup filter when no group passed: %q", r.URL.RawQuery)
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
@@ -47,7 +46,7 @@ func TestListCampaigns_AccountOnly(t *testing.T) {
 					"runSchedule":   map[string]any{"start": 1700000000000, "end": 1710000000000},
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -78,18 +77,17 @@ func TestListCampaigns_AccountOnly(t *testing.T) {
 func TestListCampaigns_WithGroup(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw := r.URL.RawQuery
-		wantAccount := "account:(values:List(urn:li:sponsoredAccount:12345))"
-		wantGroup := "campaignGroup:(values:List(urn:li:sponsoredCampaignGroup:99))"
-		if !strings.Contains(raw, wantAccount) {
-			t.Errorf("RawQuery missing account clause %q: %q", wantAccount, raw)
+		q := r.URL.Query()
+		if r.URL.Path != "/adAccounts/12345/adCampaigns" {
+			t.Errorf("path: %s", r.URL.Path)
 		}
-		if !strings.Contains(raw, wantGroup) {
-			t.Errorf("RawQuery missing group clause %q: %q", wantGroup, raw)
+		wantGroup := "urn:li:sponsoredCampaignGroup:99"
+		if q.Get("search.campaignGroup.values[0]") != wantGroup {
+			t.Errorf("search.campaignGroup.values[0] = %q, want %q", q.Get("search.campaignGroup.values[0]"), wantGroup)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{},
-			"paging":   map[string]any{"start": 0, "count": 0, "total": 0},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -123,14 +121,14 @@ func TestCreateCampaign(t *testing.T) {
 		Locale:        &Locale{Country: "US", Language: "en"},
 		DailyBudget:   &Money{CurrencyCode: "USD", Amount: "100"},
 	}
-	id, err := CreateCampaign(context.Background(), c, in)
+	id, err := CreateCampaign(context.Background(), c, "12345", in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if id != "777" {
 		t.Errorf("id: %q", id)
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaigns" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/12345/adCampaigns" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotBody["account"] != "urn:li:sponsoredAccount:12345" {
@@ -165,10 +163,10 @@ func TestUpdateCampaignOnlyStatus(t *testing.T) {
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
 	status := "ACTIVE"
-	if err := UpdateCampaign(context.Background(), c, "10", &UpdateCampaignInput{Status: &status}); err != nil {
+	if err := UpdateCampaign(context.Background(), c, "12345", "10", &UpdateCampaignInput{Status: &status}); err != nil {
 		t.Fatal(err)
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaigns/10" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/12345/adCampaigns/10" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotRestliMethod != "PARTIAL_UPDATE" {
@@ -191,10 +189,10 @@ func TestDeleteCampaign(t *testing.T) {
 	defer srv.Close()
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
-	if err := DeleteCampaign(context.Background(), c, "10"); err != nil {
+	if err := DeleteCampaign(context.Background(), c, "12345", "10"); err != nil {
 		t.Fatal(err)
 	}
-	if gotMethod != http.MethodDelete || gotPath != "/adCampaigns/10" {
+	if gotMethod != http.MethodDelete || gotPath != "/adAccounts/12345/adCampaigns/10" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 }
@@ -202,7 +200,7 @@ func TestDeleteCampaign(t *testing.T) {
 func TestGetCampaign(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaigns/10" {
+		if r.URL.Path != "/adAccounts/12345/adCampaigns/10" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:12345","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
@@ -210,7 +208,7 @@ func TestGetCampaign(t *testing.T) {
 	defer srv.Close()
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
-	camp, err := GetCampaign(context.Background(), c, "10")
+	camp, err := GetCampaign(context.Background(), c, "12345", "10")
 	if err != nil {
 		t.Fatal(err)
 	}

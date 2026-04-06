@@ -24,11 +24,11 @@ func overviewServer(t *testing.T, analyticsHandler http.HandlerFunc) *httptest.S
 				{"id":1,"name":"G1","status":"ACTIVE","account":"urn:li:sponsoredAccount:12345678"},
 				{"id":2,"name":"G2","status":"DRAFT","account":"urn:li:sponsoredAccount:12345678"}
 			],"metadata":{}}`))
-		case r.URL.Path == "/adAccounts/12345678/adCampaigns" || r.URL.Path == "/adCampaigns":
+		case r.URL.Path == "/adAccounts/12345678/adCampaigns":
 			_, _ = w.Write([]byte(`{"elements":[
 				{"id":1,"name":"C1","status":"ACTIVE","account":"urn:li:sponsoredAccount:12345678","campaignGroup":"urn:li:sponsoredCampaignGroup:1","type":"SPONSORED_UPDATES","objectiveType":"BRAND_AWARENESS","costType":"CPM"},
 				{"id":2,"name":"C2","status":"PAUSED","account":"urn:li:sponsoredAccount:12345678","campaignGroup":"urn:li:sponsoredCampaignGroup:1","type":"SPONSORED_UPDATES","objectiveType":"BRAND_AWARENESS","costType":"CPM"}
-			],"paging":{"start":0,"count":2,"total":2}}`))
+			],"metadata":{}}`))
 		case strings.HasPrefix(r.URL.Path, "/adAccounts/"):
 			_, _ = w.Write([]byte(`{"id":12345678,"name":"Acme","status":"ACTIVE","type":"BUSINESS","currency":"USD"}`))
 		case r.URL.Path == "/adAnalytics":
