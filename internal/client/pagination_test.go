@@ -1,0 +1,64 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestPaginateStartCount(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := r.URL.Query().Get("start")
+		resp := map[string]any{
+			"elements": []map[string]any{},
+			"paging":   map[string]any{"start": 0, "count": 2, "total": 5},
+		}
+		switch start {
+		case "", "0":
+			resp["elements"] = []map[string]any{{"id": 1}, {"id": 2}}
+		case "2":
+			resp["elements"] = []map[string]any{{"id": 3}, {"id": 4}}
+		case "4":
+			resp["elements"] = []map[string]any{{"id": 5}}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	var all []map[string]any
+	if err := PaginateStartCount(context.Background(), c, "/items", nil, 2, 0, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 5 {
+		t.Fatalf("expected 5 items, got %d: %v", len(all), all)
+	}
+	for i, item := range all {
+		if item["id"].(float64) != float64(i+1) {
+			t.Errorf("index %d: %v", i, item)
+		}
+	}
+}
+
+func TestPaginateStartCount_HonorsLimit(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{{"id": 1}, {"id": 2}},
+			"paging":   map[string]any{"start": 0, "count": 2, "total": 100},
+		})
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	var all []map[string]any
+	if err := PaginateStartCount(context.Background(), c, "/items", nil, 2, 3, &all); err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3 items (limit), got %d", len(all))
+	}
+}
