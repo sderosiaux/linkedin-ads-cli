@@ -202,6 +202,38 @@ func TestAnalyticsDemographics_BadPivot(t *testing.T) {
 	}
 }
 
+func TestAnalyticsDemographics_MemberPivot(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=MEMBER_SENIORITY") {
+			t.Errorf("missing pivot: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":3,"clicks":1,"costInUsd":"0.05"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--json",
+		"analytics", "demographics",
+		"--campaign", "42", "--pivot", "MEMBER_SENIORITY",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"impressions": 3`) {
+		t.Errorf("got: %s", out.String())
+	}
+}
+
 func TestAnalyticsReach_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery

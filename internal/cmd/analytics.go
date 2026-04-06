@@ -31,12 +31,22 @@ func newAnalyticsCmd() *cobra.Command {
 }
 
 var demographicsPivots = map[string]struct{}{
-	"JOB_FUNCTION": {},
-	"INDUSTRY":     {},
-	"SENIORITY":    {},
-	"COMPANY_SIZE": {},
-	"COUNTRY":      {},
-	"REGION":       {},
+	"JOB_FUNCTION":        {},
+	"INDUSTRY":            {},
+	"SENIORITY":           {},
+	"COMPANY_SIZE":        {},
+	"COUNTRY":             {},
+	"REGION":              {},
+	"MEMBER_JOB_FUNCTION": {},
+	"MEMBER_SENIORITY":    {},
+	"MEMBER_INDUSTRY":     {},
+	"MEMBER_COMPANY_SIZE": {},
+	"MEMBER_JOB_TITLE":    {},
+	"MEMBER_COMPANY":      {},
+	"MEMBER_COUNTRY":      {},
+	"MEMBER_COUNTRY_V2":   {},
+	"MEMBER_REGION":       {},
+	"MEMBER_REGION_V2":    {},
 }
 
 // parseDateRange reads --start / --end (YYYY-MM-DD). End defaults to today,
@@ -175,7 +185,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 			pivot, _ := cmd.Flags().GetString("pivot")
 			pivot = strings.ToUpper(pivot)
 			if _, ok := demographicsPivots[pivot]; !ok {
-				return fmt.Errorf("invalid --pivot %q (want JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, or REGION)", pivot)
+				return fmt.Errorf("invalid --pivot %q (want JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION, or MEMBER_* variants)", pivot)
 			}
 			c, _, err := clientFromConfig(cmd)
 			if err != nil {
@@ -193,7 +203,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
-	cmd.Flags().String("pivot", "", "JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION (required)")
+	cmd.Flags().String("pivot", "", "JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION, MEMBER_JOB_FUNCTION, MEMBER_SENIORITY, MEMBER_INDUSTRY, MEMBER_COMPANY_SIZE, MEMBER_JOB_TITLE, MEMBER_COMPANY, MEMBER_COUNTRY, MEMBER_COUNTRY_V2, MEMBER_REGION, MEMBER_REGION_V2")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd
