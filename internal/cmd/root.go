@@ -33,6 +33,7 @@ func NewRootCmd() *cobra.Command {
 		newAnalyticsCmd(),
 		newAudiencesCmd(),
 		newConversionsCmd(),
+		newLeadsCmd(),
 	)
 	return root
 }
