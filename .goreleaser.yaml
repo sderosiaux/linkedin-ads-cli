@@ -1,0 +1,74 @@
+version: 2
+
+project_name: linkedin-ads
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./... -short
+
+builds:
+  - id: linkedin-ads
+    main: ./cmd/linkedin-ads
+    binary: linkedin-ads
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - LICENSE*
+      - README*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'Merge pull request'
+      - 'Merge branch'
+
+brews:
+  - name: linkedin-ads
+    repository:
+      owner: sderosiaux
+      name: homebrew-tap
+    homepage: https://github.com/sderosiaux/linkedin-ads-cli
+    description: LinkedIn Marketing API CLI
+    license: MIT
+    test: |
+      system "#{bin}/linkedin-ads --help"
+    install: |
+      bin.install "linkedin-ads"
+
+release:
+  github:
+    owner: sderosiaux
+    name: linkedin-ads-cli
+  draft: true
+  prerelease: auto
