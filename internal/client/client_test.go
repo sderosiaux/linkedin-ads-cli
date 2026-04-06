@@ -113,6 +113,44 @@ func TestPostJSONSendsBodyAndReturnsXLinkedInID(t *testing.T) {
 	}
 }
 
+func TestPostJSONPrefersXRestLiId(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-RestLi-Id", "restli-42")
+		w.Header().Set("X-LinkedIn-Id", "linkedin-99")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	id, err := c.PostJSON(context.Background(), "/test", map[string]any{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "restli-42" {
+		t.Errorf("expected X-RestLi-Id value, got %q", id)
+	}
+}
+
+func TestPostJSONFallsBackToXLinkedInId(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Only X-LinkedIn-Id, no X-RestLi-Id.
+		w.Header().Set("X-LinkedIn-Id", "linkedin-42")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	id, err := c.PostJSON(context.Background(), "/test", map[string]any{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "linkedin-42" {
+		t.Errorf("expected X-LinkedIn-Id fallback, got %q", id)
+	}
+}
+
 func TestPostJSONDecodesResponseWhenOutNonNil(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

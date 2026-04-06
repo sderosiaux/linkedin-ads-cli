@@ -191,7 +191,10 @@ func (c *Client) PostJSON(ctx context.Context, path string, body, out any) (stri
 	if resp.StatusCode >= 300 {
 		return "", parseError(resp)
 	}
-	newID := resp.Header.Get("X-LinkedIn-Id")
+	newID := resp.Header.Get("X-RestLi-Id")
+	if newID == "" {
+		newID = resp.Header.Get("X-LinkedIn-Id")
+	}
 	if out != nil && resp.ContentLength != 0 {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 			return newID, err
