@@ -4,12 +4,19 @@ run:
 linters:
   default: none
   enable:
+    - bodyclose
+    - contextcheck
     - errcheck
+    - errorlint
+    - gocritic
+    - gosec
     - govet
     - ineffassign
+    - misspell
+    - noctx
+    - revive
     - staticcheck
     - unused
-    - revive
   settings:
     revive:
       rules:

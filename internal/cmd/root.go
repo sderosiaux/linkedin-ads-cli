@@ -9,8 +9,9 @@ func NewRootCmd() *cobra.Command {
 		Long:          "Inspect and manage LinkedIn Ads campaigns from the terminal.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			_ = cmd.Help()
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
 		},
 	}
 }

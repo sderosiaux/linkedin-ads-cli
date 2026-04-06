@@ -1,5 +1,9 @@
-/linkedin-ads
+linkedin-ads
 /dist/
 *.test
 *.out
+coverage.*
+*.prof
 .DS_Store
+.idea/
+.vscode/
