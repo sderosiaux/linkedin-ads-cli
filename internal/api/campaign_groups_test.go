@@ -15,16 +15,16 @@ import (
 func TestListCampaignGroups(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaignGroups" {
+		if r.URL.Path != "/adAccounts/12345/adCampaignGroups" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		raw := r.URL.RawQuery
 		if !strings.Contains(raw, "q=search") {
 			t.Errorf("RawQuery missing q=search: %q", raw)
 		}
-		wantTuple := "search=(account:(values:List(urn:li:sponsoredAccount:12345)))"
-		if !strings.Contains(raw, wantTuple) {
-			t.Errorf("RawQuery missing unescaped tuple %q: %q", wantTuple, raw)
+		// Account scoping happens via the nested path, NOT via a search filter.
+		if strings.Contains(raw, "search.") {
+			t.Errorf("RawQuery should not carry search.* filters when none requested: %q", raw)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
@@ -50,7 +50,7 @@ func TestListCampaignGroups(t *testing.T) {
 					"account": "urn:li:sponsoredAccount:12345",
 				},
 			},
-			"paging": map[string]any{"start": 0, "count": 2, "total": 2},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -104,14 +104,14 @@ func TestCreateCampaignGroup(t *testing.T) {
 		},
 		RunSchedule: &DateRange{Start: 1745000000000},
 	}
-	id, err := CreateCampaignGroup(context.Background(), c, in)
+	id, err := CreateCampaignGroup(context.Background(), c, "12345", in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if gotMethod != http.MethodPost {
 		t.Errorf("method: %q", gotMethod)
 	}
-	if gotPath != "/adCampaignGroups" {
+	if gotPath != "/adAccounts/12345/adCampaignGroups" {
 		t.Errorf("path: %q", gotPath)
 	}
 	if id != "555" {
@@ -154,7 +154,7 @@ func TestUpdateCampaignGroupOnlyStatus(t *testing.T) {
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
 	status := "ACTIVE"
-	if err := UpdateCampaignGroup(context.Background(), c, "111", &UpdateCampaignGroupInput{
+	if err := UpdateCampaignGroup(context.Background(), c, "12345", "111", &UpdateCampaignGroupInput{
 		Status: &status,
 	}); err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestUpdateCampaignGroupOnlyStatus(t *testing.T) {
 	if gotMethod != http.MethodPost {
 		t.Errorf("method: %q", gotMethod)
 	}
-	if gotPath != "/adCampaignGroups/111" {
+	if gotPath != "/adAccounts/12345/adCampaignGroups/111" {
 		t.Errorf("path: %q", gotPath)
 	}
 	if gotRestliMethod != "PARTIAL_UPDATE" {
@@ -185,13 +185,13 @@ func TestDeleteCampaignGroup(t *testing.T) {
 	defer srv.Close()
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
-	if err := DeleteCampaignGroup(context.Background(), c, "111"); err != nil {
+	if err := DeleteCampaignGroup(context.Background(), c, "12345", "111"); err != nil {
 		t.Fatal(err)
 	}
 	if gotMethod != http.MethodDelete {
 		t.Errorf("method: %q", gotMethod)
 	}
-	if gotPath != "/adCampaignGroups/111" {
+	if gotPath != "/adAccounts/12345/adCampaignGroups/111" {
 		t.Errorf("path: %q", gotPath)
 	}
 }
@@ -199,7 +199,7 @@ func TestDeleteCampaignGroup(t *testing.T) {
 func TestGetCampaignGroup(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaignGroups/111" {
+		if r.URL.Path != "/adAccounts/12345/adCampaignGroups/111" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"ACTIVE","account":"urn:li:sponsoredAccount:12345"}`))
@@ -207,7 +207,7 @@ func TestGetCampaignGroup(t *testing.T) {
 	defer srv.Close()
 
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
-	g, err := GetCampaignGroup(context.Background(), c, "111")
+	g, err := GetCampaignGroup(context.Background(), c, "12345", "111")
 	if err != nil {
 		t.Fatal(err)
 	}

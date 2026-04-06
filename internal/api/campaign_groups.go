@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
-	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
 )
 
-// CampaignGroup is a LinkedIn ad campaign group, decoded from /adCampaignGroups.
+// CampaignGroup is a LinkedIn ad campaign group, decoded from
+// /adAccounts/{accountId}/adCampaignGroups.
 type CampaignGroup struct {
 	ID              int64      `json:"id"`
 	Name            string     `json:"name"`
@@ -20,28 +20,30 @@ type CampaignGroup struct {
 }
 
 // ListCampaignGroups returns campaign groups under the given account id (bare,
-// not URN). If limit > 0, iteration stops after limit items.
+// not URN). The account scoping happens via the nested path; only optional
+// search filters (e.g. status) ride along as flat dot-notation params.
+// If limit > 0, iteration stops after limit items.
 func ListCampaignGroups(ctx context.Context, c *client.Client, accountID string, limit int) ([]CampaignGroup, error) {
-	accountURN := urn.Wrap(urn.Account, accountID)
-	rawQuery := fmt.Sprintf("q=search&search=(account:(values:List(%s)))", accountURN)
+	q := url.Values{}
+	q.Set("q", "search")
 	var out []CampaignGroup
-	if err := client.PaginateStartCountRaw(ctx, c, "/adCampaignGroups", rawQuery, 500, limit, &out); err != nil {
+	if err := client.PaginateToken(ctx, c, "/adAccounts/"+accountID+"/adCampaignGroups", q, limit, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// GetCampaignGroup fetches a single campaign group by id.
-func GetCampaignGroup(ctx context.Context, c *client.Client, id string) (*CampaignGroup, error) {
+// GetCampaignGroup fetches a single campaign group by id under accountID.
+func GetCampaignGroup(ctx context.Context, c *client.Client, accountID, id string) (*CampaignGroup, error) {
 	var g CampaignGroup
-	if err := c.GetJSON(ctx, "/adCampaignGroups/"+id, nil, &g); err != nil {
+	if err := c.GetJSON(ctx, "/adAccounts/"+accountID+"/adCampaignGroups/"+id, nil, &g); err != nil {
 		return nil, err
 	}
 	return &g, nil
 }
 
-// CreateCampaignGroupInput is the request body for POST /adCampaignGroups.
-// Account must be a full URN.
+// CreateCampaignGroupInput is the request body for
+// POST /adAccounts/{accountId}/adCampaignGroups. Account must be a full URN.
 type CreateCampaignGroupInput struct {
 	Account     string     `json:"account"`
 	Name        string     `json:"name"`
@@ -50,13 +52,13 @@ type CreateCampaignGroupInput struct {
 	RunSchedule *DateRange `json:"runSchedule,omitempty"`
 }
 
-// CreateCampaignGroup creates a new campaign group and returns the new id.
-// Status defaults to DRAFT when unset.
-func CreateCampaignGroup(ctx context.Context, c *client.Client, in *CreateCampaignGroupInput) (string, error) {
+// CreateCampaignGroup creates a new campaign group under accountID and returns
+// the new id. Status defaults to DRAFT when unset.
+func CreateCampaignGroup(ctx context.Context, c *client.Client, accountID string, in *CreateCampaignGroupInput) (string, error) {
 	if in.Status == "" {
 		in.Status = "DRAFT"
 	}
-	return c.PostJSON(ctx, "/adCampaignGroups", in, nil)
+	return c.PostJSON(ctx, "/adAccounts/"+accountID+"/adCampaignGroups", in, nil)
 }
 
 // UpdateCampaignGroupInput is the partial-update body for a campaign group.
@@ -71,14 +73,17 @@ type UpdateCampaignGroupInput struct {
 
 // UpdateCampaignGroup applies a partial update to a campaign group via the
 // Rest.li PARTIAL_UPDATE protocol.
-func UpdateCampaignGroup(ctx context.Context, c *client.Client, id string, in *UpdateCampaignGroupInput) error {
+func UpdateCampaignGroup(ctx context.Context, c *client.Client, accountID, id string, in *UpdateCampaignGroupInput) error {
 	body := map[string]any{
 		"patch": map[string]any{"$set": in},
 	}
-	return c.PartialUpdate(ctx, "/adCampaignGroups/"+id, body)
+	return c.PartialUpdate(ctx, "/adAccounts/"+accountID+"/adCampaignGroups/"+id, body)
 }
 
-// DeleteCampaignGroup deletes a campaign group by id.
-func DeleteCampaignGroup(ctx context.Context, c *client.Client, id string) error {
-	return c.Delete(ctx, "/adCampaignGroups/"+id)
+// DeleteCampaignGroup hard-deletes a campaign group by id. Per LinkedIn
+// semantics, only DRAFT groups can be hard-deleted; non-draft groups must be
+// soft-deleted via UpdateCampaignGroup with status PENDING_DELETION. The
+// dispatch is handled at the cmd layer.
+func DeleteCampaignGroup(ctx context.Context, c *client.Client, accountID, id string) error {
+	return c.Delete(ctx, "/adAccounts/"+accountID+"/adCampaignGroups/"+id)
 }

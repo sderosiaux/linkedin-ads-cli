@@ -21,7 +21,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			switch r.URL.Path {
-			case "/adCampaignGroups/111":
+			case "/adAccounts/12345/adCampaignGroups/111":
 				_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:12345"}`))
 			case "/adCampaigns/10":
 				_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"PAUSED","account":"urn:li:sponsoredAccount:12345","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
@@ -58,7 +58,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"campaign-groups", "create",
 				"--name", "Test", "--total-budget", "5000", "--currency", "USD",
 			},
-			want: "POST /adCampaignGroups",
+			want: "POST /adAccounts/12345/adCampaignGroups",
 		},
 		{
 			name: "campaign-groups update",
@@ -66,7 +66,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaign-groups", "update", "111", "--status", "ACTIVE",
 			},
-			want: "POST /adCampaignGroups/111",
+			want: "POST /adAccounts/12345/adCampaignGroups/111",
 		},
 		{
 			name: "campaign-groups delete",
@@ -74,7 +74,7 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 				"--config", cfgPath, "--dry-run",
 				"campaign-groups", "delete", "111",
 			},
-			want: "DELETE /adCampaignGroups/111",
+			want: "DELETE /adAccounts/12345/adCampaignGroups/111",
 		},
 		{
 			name: "campaigns create",

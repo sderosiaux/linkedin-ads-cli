@@ -100,11 +100,15 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 		Short: "Get a single campaign group by id",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, _, err := clientFromConfig(cmd)
+			c, cfg, err := clientFromConfig(cmd)
 			if err != nil {
 				return err
 			}
-			g, err := api.GetCampaignGroup(cmd.Context(), c, args[0])
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			g, err := api.GetCampaignGroup(cmd.Context(), c, accountID, args[0])
 			if err != nil {
 				return err
 			}
@@ -157,8 +161,9 @@ func newCampaignGroupsCreateCmd() *cobra.Command {
 				}
 				in.RunSchedule = rs
 			}
-			return executeWrite(cmd, "POST /adCampaignGroups", in, func() error {
-				id, err := api.CreateCampaignGroup(cmd.Context(), c, in)
+			summary := fmt.Sprintf("POST /adAccounts/%s/adCampaignGroups", accountID)
+			return executeWrite(cmd, summary, in, func() error {
+				id, err := api.CreateCampaignGroup(cmd.Context(), c, accountID, in)
 				if err != nil {
 					return err
 				}
@@ -192,12 +197,16 @@ func newCampaignGroupsUpdateCmd() *cobra.Command {
 		Short: "Partially update a campaign group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, _, err := clientFromConfig(cmd)
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
 			if err != nil {
 				return err
 			}
 			id := args[0]
-			current, err := api.GetCampaignGroup(cmd.Context(), c, id)
+			current, err := api.GetCampaignGroup(cmd.Context(), c, accountID, id)
 			if err != nil {
 				return err
 			}
@@ -262,9 +271,9 @@ func newCampaignGroupsUpdateCmd() *cobra.Command {
 			payload := map[string]any{
 				"patch": map[string]any{"$set": in},
 			}
-			summary := "POST /adCampaignGroups/" + id
+			summary := fmt.Sprintf("POST /adAccounts/%s/adCampaignGroups/%s", accountID, id)
 			return executeWrite(cmd, summary, payload, func() error {
-				if err := api.UpdateCampaignGroup(cmd.Context(), c, id, in); err != nil {
+				if err := api.UpdateCampaignGroup(cmd.Context(), c, accountID, id, in); err != nil {
 					return err
 				}
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), "✓ Updated.")
@@ -287,13 +296,17 @@ func newCampaignGroupsDeleteCmd() *cobra.Command {
 		Short: "Delete a campaign group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, _, err := clientFromConfig(cmd)
+			c, cfg, err := clientFromConfig(cmd)
 			if err != nil {
 				return err
 			}
-			summary := "DELETE /adCampaignGroups/" + args[0]
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			summary := fmt.Sprintf("DELETE /adAccounts/%s/adCampaignGroups/%s", accountID, args[0])
 			return executeWrite(cmd, summary, map[string]any{"id": args[0]}, func() error {
-				if err := api.DeleteCampaignGroup(cmd.Context(), c, args[0]); err != nil {
+				if err := api.DeleteCampaignGroup(cmd.Context(), c, accountID, args[0]); err != nil {
 					return err
 				}
 				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted campaign group %s\n", args[0])

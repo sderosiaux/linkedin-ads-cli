@@ -15,17 +15,17 @@ import (
 
 func TestCampaignGroupsList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaignGroups" {
+		if r.URL.Path != "/adAccounts/777/adCampaignGroups" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		if !strings.Contains(r.URL.Query().Get("search"), "urn:li:sponsoredAccount:777") {
-			t.Errorf("search: %q", r.URL.Query().Get("search"))
+		if r.URL.Query().Get("q") != "search" {
+			t.Errorf("q: %q", r.URL.Query().Get("q"))
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
 				{"id": 111, "name": "Q1", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777"},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -53,14 +53,14 @@ func TestCampaignGroupsList_JSON(t *testing.T) {
 
 func TestCampaignGroupsBare_DelegatesToList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaignGroups" {
+		if r.URL.Path != "/adAccounts/777/adCampaignGroups" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
 				{"id": 222, "name": "Bare", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777"},
 			},
-			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
+			"metadata": map[string]any{},
 		})
 	}))
 	defer srv.Close()
@@ -88,7 +88,7 @@ func TestCampaignGroupsBare_DelegatesToList(t *testing.T) {
 
 func TestCampaignGroupsList_EmptyState_Terminal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -123,7 +123,7 @@ func TestCampaignGroupsList_Compact(t *testing.T) {
 			{"id":111,"name":"Q1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777",
 			 "totalBudget":{"amount":"5000","currencyCode":"USD"},
 			 "runSchedule":{"start":1700000000000,"end":1710000000000}}
-		],"paging":{"start":0,"count":1,"total":1}}`))
+		],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -158,10 +158,10 @@ func TestCampaignGroupsList_Compact(t *testing.T) {
 
 func TestCampaignGroupsList_AccountFlagOverride(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Query().Get("search"), "urn:li:sponsoredAccount:999") {
-			t.Errorf("expected --account override 999, got search=%q", r.URL.Query().Get("search"))
+		if r.URL.Path != "/adAccounts/999/adCampaignGroups" {
+			t.Errorf("expected --account override 999 in path, got: %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"elements":[],"paging":{"start":0,"count":0,"total":0}}`))
+		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
 	}))
 	defer srv.Close()
 
@@ -208,10 +208,10 @@ func TestCampaignGroupsList_NoAccountIsCleanError(t *testing.T) {
 func TestCampaignGroupsList_ResolveJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/adCampaignGroups":
+		case r.URL.Path == "/adAccounts/777/adCampaignGroups":
 			_, _ = w.Write([]byte(`{"elements":[
 				{"id":111,"name":"Q1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}
-			],"paging":{"start":0,"count":1,"total":1}}`))
+			],"metadata":{}}`))
 		case strings.HasPrefix(r.URL.Path, "/adAccounts/777"):
 			_, _ = w.Write([]byte(`{"id":777,"name":"Acme EMEA","currency":"USD"}`))
 		default:
@@ -279,7 +279,7 @@ func TestCampaignGroupsCreate_DryRun(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "POST /adCampaignGroups") {
+	if !strings.Contains(out.String(), "POST /adAccounts/777/adCampaignGroups") {
 		t.Errorf("expected POST summary in dry-run output: %s", out.String())
 	}
 	if !strings.Contains(out.String(), `"name": "Q2"`) {
@@ -321,7 +321,7 @@ func TestCampaignGroupsCreate_YesPath(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaignGroups" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/777/adCampaignGroups" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotBody["name"] != "Q2" || gotBody["status"] != "DRAFT" {
@@ -336,7 +336,7 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 	var gotMethod, gotPath, gotRestliMethod string
 	var gotBodyRaw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/111" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/111" {
 			_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:777"}`))
 			return
 		}
@@ -351,7 +351,7 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -366,7 +366,7 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodPost || gotPath != "/adCampaignGroups/111" {
+	if gotMethod != http.MethodPost || gotPath != "/adAccounts/777/adCampaignGroups/111" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 	if gotRestliMethod != "PARTIAL_UPDATE" {
@@ -381,11 +381,11 @@ func TestCampaignGroupsUpdate_OnlyStatus(t *testing.T) {
 func TestCampaignGroupsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 	var gotPatch bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/12345" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/12345" {
 			_, _ = w.Write([]byte(`{"id":12345,"name":"Q2 Brand","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/adCampaignGroups/12345" {
+		if r.Method == http.MethodPost && r.URL.Path == "/adAccounts/777/adCampaignGroups/12345" {
 			gotPatch = true
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -397,7 +397,7 @@ func TestCampaignGroupsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -425,7 +425,7 @@ func TestCampaignGroupsUpdate_ShowsDiff_AndAppliesPatch(t *testing.T) {
 
 func TestCampaignGroupsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/12345" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/12345" {
 			_, _ = w.Write([]byte(`{"id":12345,"name":"Q2","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
 			return
 		}
@@ -438,7 +438,7 @@ func TestCampaignGroupsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -460,7 +460,7 @@ func TestCampaignGroupsUpdate_NoChanges_ReturnsCleanly(t *testing.T) {
 
 func TestCampaignGroupsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/adCampaignGroups/111" {
+		if r.Method == http.MethodGet && r.URL.Path == "/adAccounts/777/adCampaignGroups/111" {
 			_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"PAUSED","account":"urn:li:sponsoredAccount:777"}`))
 			return
 		}
@@ -471,7 +471,7 @@ func TestCampaignGroupsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -486,7 +486,7 @@ func TestCampaignGroupsUpdate_DryRun_ShowsDiff_NoCall(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "POST /adCampaignGroups/111") {
+	if !strings.Contains(out.String(), "POST /adAccounts/777/adCampaignGroups/111") {
 		t.Errorf("expected summary in dry-run output: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "status: PAUSED  →  ACTIVE") {
@@ -509,7 +509,7 @@ func TestCampaignGroupsDelete_YesPath(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -521,7 +521,7 @@ func TestCampaignGroupsDelete_YesPath(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if gotMethod != http.MethodDelete || gotPath != "/adCampaignGroups/123" {
+	if gotMethod != http.MethodDelete || gotPath != "/adAccounts/777/adCampaignGroups/123" {
 		t.Errorf("got %s %s", gotMethod, gotPath)
 	}
 }
@@ -535,7 +535,7 @@ func TestCampaignGroupsDelete_DryRun(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
@@ -547,14 +547,14 @@ func TestCampaignGroupsDelete_DryRun(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "DELETE /adCampaignGroups/123") {
+	if !strings.Contains(out.String(), "DELETE /adAccounts/777/adCampaignGroups/123") {
 		t.Errorf("expected summary in dry-run output: %s", out.String())
 	}
 }
 
 func TestCampaignGroupsGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adCampaignGroups/111" {
+		if r.URL.Path != "/adAccounts/777/adCampaignGroups/111" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"id":111,"name":"Q1","status":"ACTIVE","account":"urn:li:sponsoredAccount:777"}`))
@@ -565,7 +565,7 @@ func TestCampaignGroupsGet_JSON(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
 		t.Fatal(err)
 	}
 
