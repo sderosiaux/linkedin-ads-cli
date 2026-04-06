@@ -21,7 +21,7 @@ func NewRootCmd() *cobra.Command {
 	root.PersistentFlags().Bool("json", false, "Output as JSON (LLM/scripts)")
 	root.PersistentFlags().Bool("compact", false, "Minimal JSON fields (requires --json)")
 	root.PersistentFlags().Int("limit", 0, "Cap array results at N items")
-	root.AddCommand(newAuthCmd(), newUseAccountCmd(), newCurrentAccountCmd(), newConfigCmd())
+	root.AddCommand(newAuthCmd(), newUseAccountCmd(), newCurrentAccountCmd(), newConfigCmd(), newAccountsCmd())
 	return root
 }
 
