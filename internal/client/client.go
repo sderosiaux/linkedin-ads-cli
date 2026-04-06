@@ -232,6 +232,32 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
+// PutBinary sends a PUT request with binary data to an external URL (e.g. a
+// LinkedIn upload URL). Unlike other methods, this does NOT prepend the base
+// URL and does NOT send Linkedin-Version or X-Restli-Protocol-Version headers.
+// Only Authorization: Bearer and Content-Type are set.
+func (c *Client) PutBinary(ctx context.Context, targetURL string, data []byte, contentType string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, targetURL, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", contentType)
+
+	started := time.Now()
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.logTrace(http.MethodPut, targetURL, 0, time.Since(started), -1, err)
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	c.logTrace(http.MethodPut, targetURL, resp.StatusCode, time.Since(started), resp.ContentLength, nil)
+	if resp.StatusCode >= 300 {
+		return parseError(resp)
+	}
+	return nil
+}
+
 // GetJSONRawQuery is like GetJSON but takes an already-encoded query string
 // and forwards it verbatim. Use this for LinkedIn Rest.li finder parameters
 // whose tuple syntax (e.g. "(start:(year:2026,...))" or "List(urn:...)")

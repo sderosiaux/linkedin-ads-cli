@@ -397,6 +397,60 @@ func TestVerboseTracing_DisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestPutBinary(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotCT, gotAuth string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotCT = r.Header.Get("Content-Type")
+		gotAuth = r.Header.Get("Authorization")
+		gotBody, _ = io.ReadAll(r.Body)
+		// Must NOT have LinkedIn-specific headers
+		if r.Header.Get("Linkedin-Version") != "" {
+			t.Error("PutBinary should NOT send Linkedin-Version")
+		}
+		if r.Header.Get("X-Restli-Protocol-Version") != "" {
+			t.Error("PutBinary should NOT send X-Restli-Protocol-Version")
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: "http://should-not-be-used", Token: "tok", APIVersion: "202601"}) //nolint:gosec // test fixture
+	err := c.PutBinary(context.Background(), srv.URL+"/upload", []byte("binary-data"), "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPut {
+		t.Errorf("method: %q", gotMethod)
+	}
+	if gotCT != "image/png" {
+		t.Errorf("content-type: %q", gotCT)
+	}
+	if gotAuth != "Bearer tok" {
+		t.Errorf("auth: %q", gotAuth)
+	}
+	if string(gotBody) != "binary-data" {
+		t.Errorf("body: %q", string(gotBody))
+	}
+}
+
+func TestPutBinaryErrorOn400(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"status":400,"code":"BAD","message":"bad upload"}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: "http://unused", Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture
+	err := c.PutBinary(context.Background(), srv.URL+"/upload", []byte("data"), "image/png")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestGetJSONRawQueryPreservesUnescapedTuples(t *testing.T) {
 	t.Parallel()
 	var gotQuery string

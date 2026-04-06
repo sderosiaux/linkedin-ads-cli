@@ -36,6 +36,7 @@ func NewRootCmd() *cobra.Command {
 		newCampaignsCmd(),
 		newCreativesCmd(),
 		newAnalyticsCmd(),
+		newImagesCmd(),
 		newAudiencesCmd(),
 		newConversionsCmd(),
 		newLeadsCmd(),

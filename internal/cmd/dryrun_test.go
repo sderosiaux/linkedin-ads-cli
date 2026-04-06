@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,11 +47,26 @@ func TestDryRun_NoHTTPCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Temp image file for images upload test
+	imgPath := filepath.Join(dir, "test.png")
+	if err := os.WriteFile(imgPath, []byte("png"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	cases := []struct {
 		name string
 		args []string
 		want string
 	}{
+		{
+			name: "images upload",
+			args: []string{
+				"--config", cfgPath, "--dry-run",
+				"images", "upload",
+				"--file", imgPath, "--owner", "789",
+			},
+			want: "initializeUpload",
+		},
 		{
 			name: "creatives create",
 			args: []string{
