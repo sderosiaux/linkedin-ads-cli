@@ -16,7 +16,7 @@ func newAuthCmd() *cobra.Command {
 		Use:   "auth",
 		Short: "Manage authentication",
 	}
-	auth.AddCommand(newAuthLoginCmd())
+	auth.AddCommand(newAuthLoginCmd(), newAuthLogoutCmd(), newAuthStatusCmd())
 	return auth
 }
 
@@ -58,4 +58,53 @@ func newAuthLoginCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&token, "token", "", "API token (skips interactive prompt)")
 	return cmd
+}
+
+func newAuthLogoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "logout",
+		Short: "Clear the saved API token",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path := configPathFrom(cmd)
+			c, err := config.Load(path)
+			if err != nil {
+				return err
+			}
+			c.Token = ""
+			if err := config.Save(path, c); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "✓ Token cleared.")
+			return err
+		},
+	}
+}
+
+func newAuthStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show authentication status",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path := configPathFrom(cmd)
+			c, err := config.Load(path)
+			if err != nil {
+				return err
+			}
+			if c.Token == "" {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "not authenticated")
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "authenticated (token ...%s)\n", tail(c.Token, 4))
+			return err
+		},
+	}
+}
+
+func tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }

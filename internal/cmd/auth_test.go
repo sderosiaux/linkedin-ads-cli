@@ -49,6 +49,80 @@ func TestAuthLogin_FlagToken_WritesConfig(t *testing.T) {
 	}
 }
 
+func TestAuthLogout_ClearsToken(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	_ = config.Save(cfgPath, &config.Config{
+		Token:          "abc",
+		DefaultAccount: "12345",
+		APIVersion:     "202601",
+	})
+
+	root := NewRootCmd()
+	root.SetArgs([]string{"--config", cfgPath, "auth", "logout"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	c, _ := config.Load(cfgPath)
+	if c.Token != "" {
+		t.Errorf("token not cleared: %q", c.Token)
+	}
+	if c.DefaultAccount != "12345" {
+		t.Errorf("default_account should be preserved, got: %q", c.DefaultAccount)
+	}
+	if c.APIVersion != "202601" {
+		t.Errorf("api_version should be preserved, got: %q", c.APIVersion)
+	}
+}
+
+func TestAuthStatus_NoToken(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "auth", "status"})
+	_ = root.Execute()
+
+	if !strings.Contains(out.String(), "not authenticated") {
+		t.Errorf("expected 'not authenticated', got: %s", out.String())
+	}
+}
+
+func TestAuthStatus_WithToken(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	_ = config.Save(cfgPath, &config.Config{Token: "AQX_longtokenstring_XYZ"}) //nolint:gosec // test fixture, not a real token
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "auth", "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	s := out.String()
+	if !strings.Contains(s, "authenticated") {
+		t.Errorf("expected 'authenticated' in output: %s", s)
+	}
+	// must NOT contain the full token
+	if strings.Contains(s, "AQX_longtokenstring_XYZ") {
+		t.Errorf("full token leaked in status output: %s", s)
+	}
+	// should show the last 4 chars masked (e.g., "...XYZ" or similar)
+	if !strings.Contains(s, "XYZ") {
+		t.Errorf("expected token tail hint in output: %s", s)
+	}
+}
+
 func TestAuthLogin_PreservesExistingFields(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
