@@ -13,7 +13,7 @@ func newLeadsCmd() *cobra.Command {
 		Use:   "leads",
 		Short: "Inspect lead-gen forms and submissions",
 	}
-	root.AddCommand(newLeadsFormsCmd())
+	root.AddCommand(newLeadsFormsCmd(), newLeadsPerformanceCmd())
 	return root
 }
 
@@ -24,6 +24,47 @@ func newLeadsFormsCmd() *cobra.Command {
 	}
 	forms.AddCommand(newLeadsFormsListCmd())
 	return forms
+}
+
+func newLeadsPerformanceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "performance",
+		Short: "Lead-gen form performance breakdown over a date range (default: last 30 days)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			start, end, err := parseDateRange(cmd)
+			if err != nil {
+				return err
+			}
+			formID, _ := cmd.Flags().GetString("form")
+			rows, err := api.GetLeadPerformance(cmd.Context(), c, accountID, formID, start, end)
+			if err != nil {
+				return err
+			}
+			return writeOutput(cmd, rows, func() string {
+				var b strings.Builder
+				b.WriteString("FORM                                    IMPRESSIONS   CLICKS   OPENS   SUBMITS  COST\n")
+				for _, r := range rows {
+					fmt.Fprintf(&b, "%-40s %11d %8d %7d %8d %s\n",
+						truncate(r.Form, 40), r.Impressions, r.Clicks, r.LeadGenFormOpens, r.LeadSubmissions, r.CostInUsd)
+				}
+				return b.String()
+			})
+		},
+	}
+	cmd.Flags().String("account", "", "Ad account id (default: current-account)")
+	cmd.Flags().String("form", "", "Filter by lead-gen form id")
+	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
+	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
+	return cmd
 }
 
 func newLeadsFormsListCmd() *cobra.Command {
