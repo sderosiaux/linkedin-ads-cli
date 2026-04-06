@@ -116,3 +116,58 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
+
+// GetJSONRawQuery is like GetJSON but takes an already-encoded query string
+// and forwards it verbatim. Use this for LinkedIn Rest.li finder parameters
+// whose tuple syntax (e.g. "(start:(year:2026,...))" or "List(urn:...)")
+// must NOT be percent-escaped — Go's url.Values.Encode() would mangle them.
+func (c *Client) GetJSONRawQuery(ctx context.Context, path, rawQuery string, out any) error {
+	resp, err := c.doRaw(ctx, http.MethodGet, path, rawQuery)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return parseError(resp)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// doRaw is a sibling of do() that sets u.RawQuery directly from rawQuery
+// instead of going through url.Values.Encode(). It shares the same retry,
+// header, and context handling.
+func (c *Client) doRaw(ctx context.Context, method, path, rawQuery string) (*http.Response, error) {
+	u, err := url.Parse(c.base + path)
+	if err != nil {
+		return nil, err
+	}
+	u.RawQuery = rawQuery
+
+	var resp *http.Response
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		req, rerr := http.NewRequestWithContext(ctx, method, u.String(), nil) //nolint:gosec // base URL from trusted config
+		if rerr != nil {
+			return nil, rerr
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Linkedin-Version", c.version)
+		req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err = c.http.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if !shouldRetry(resp.StatusCode) || attempt == maxAttempts-1 {
+			return resp, nil
+		}
+		d := retryDelay(resp, attempt)
+		_ = resp.Body.Close()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(d):
+		}
+	}
+	return resp, nil
+}

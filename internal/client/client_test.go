@@ -66,3 +66,23 @@ func TestGetJSONWithQueryParams(t *testing.T) {
 		t.Errorf("query: %q", gotQuery)
 	}
 }
+
+func TestGetJSONRawQueryPreservesUnescapedTuples(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"})
+	raw := "q=analytics&pivot=CAMPAIGN&dateRange=(start:(year:2026,month:1,day:1),end:(year:2026,month:1,day:31))&accounts=List(urn:li:sponsoredAccount:12345)"
+	var out map[string]any
+	if err := c.GetJSONRawQuery(context.Background(), "/adAnalytics", raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	if gotQuery != raw {
+		t.Errorf("expected raw query preserved.\n got: %s\nwant: %s", gotQuery, raw)
+	}
+}
