@@ -170,6 +170,58 @@ func TestGetSingleCampaignAnalytics(t *testing.T) {
 	}
 }
 
+func TestAnalyticsRow_VideoMetrics(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{
+					"impressions":                   500,
+					"clicks":                        10,
+					"costInUsd":                     "2.50",
+					"videoViews":                    100,
+					"videoStarts":                   80,
+					"videoCompletions":              30,
+					"videoFirstQuartileCompletions": 60,
+					"videoMidpointCompletions":      45,
+					"videoThirdQuartileCompletions": 35,
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetCreativeAnalytics(context.Background(), c, "42", start, end, "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len: %d", len(rows))
+	}
+	r := rows[0]
+	if r.VideoViews != 100 {
+		t.Errorf("VideoViews: %d", r.VideoViews)
+	}
+	if r.VideoStarts != 80 {
+		t.Errorf("VideoStarts: %d", r.VideoStarts)
+	}
+	if r.VideoCompletions != 30 {
+		t.Errorf("VideoCompletions: %d", r.VideoCompletions)
+	}
+	if r.VideoQ1 != 60 {
+		t.Errorf("VideoQ1: %d", r.VideoQ1)
+	}
+	if r.VideoMidpoint != 45 {
+		t.Errorf("VideoMidpoint: %d", r.VideoMidpoint)
+	}
+	if r.VideoQ3 != 35 {
+		t.Errorf("VideoQ3: %d", r.VideoQ3)
+	}
+}
+
 func TestGetDailyTrendsAnalytics_CampaignScope(t *testing.T) {
 	t.Parallel()
 	var gotRaw string

@@ -23,6 +23,12 @@ type AnalyticsRow struct {
 	Conversions         int64          `json:"externalWebsiteConversions,omitempty"`
 	OneClickLeads       int64          `json:"oneClickLeads,omitempty"`
 	Reach               int64          `json:"approximateUniqueImpressions,omitempty"`
+	VideoViews          int64          `json:"videoViews,omitempty"`
+	VideoStarts         int64          `json:"videoStarts,omitempty"`
+	VideoCompletions    int64          `json:"videoCompletions,omitempty"`
+	VideoQ1             int64          `json:"videoFirstQuartileCompletions,omitempty"`
+	VideoMidpoint       int64          `json:"videoMidpointCompletions,omitempty"`
+	VideoQ3             int64          `json:"videoThirdQuartileCompletions,omitempty"`
 }
 
 // formatDateRange renders a LinkedIn Rest.li dateRange tuple. The parens and
