@@ -186,13 +186,14 @@ Every write:
 | `--json` | JSON output. LLM/scripts path. |
 | `--compact` | Whitelist essential fields. Requires `--json`. |
 | `--limit N` | Cap array results at N. Stops pagination early. |
-| `--resolve` | Enrich URNs with human names via the resolver cache. |
 | `--account <id>` | Override default account for this call. |
 | `--dry-run` | No write. Print the request that would be sent. |
 | `--yes` | Skip confirmation prompts. |
 | `--version-date YYYYMM` | Override the `Linkedin-Version` header. |
 | `--config <path>` | Alternative config file. |
-| `-v, --verbose` | Log HTTP requests to stderr. |
+| `--verbose` | Log HTTP requests to stderr. No `-v` short form (cobra reserves `-v` for `--version`). |
+
+`--resolve` is a per-command flag on `campaigns list` and `campaign-groups list` only (not persistent — only those two commands have URN references worth enriching).
 
 ## HTTP client (`internal/client`)
 
@@ -348,4 +349,14 @@ Create one with: linkedin-ads campaigns create --group <id> --name ... --daily-b
 - LinkedIn Marketing API docs — `https://learn.microsoft.com/en-us/linkedin/marketing/`
 - `segment-cli` — sibling project, source of the architecture
 - `linkedin-ads-mcp` — source of the endpoint taxonomy
-- `spf13/cobra` / `spf13/viper` — CLI framework
+- `spf13/cobra` — CLI framework (viper was planned but not used; config uses `gopkg.in/yaml.v3` + manual env/flag merge)
+
+## Implementation deviations
+
+These items diverged from the original design during implementation and have been reconciled:
+
+- **Package layout**: `internal/format/` was never created (formatters are inlined per command). `internal/config/state.go` was merged into `config.go`. `internal/api/demographics.go` lives inside `analytics.go`. `internal/cmd/config.go` is named `config_cmd.go` to avoid visual shadowing of the `config` package. Test fixtures are inline in `*_test.go` rather than under `testdata/`. No functional impact.
+- **Pagination**: a single `Iterator[T]` generic was planned; the implementation has two plain functions (`PaginateStartCount`, `PaginateToken`) plus a `Raw` variant for Rest.li finder clauses with tuple syntax that must not be percent-encoded. Both follow `paging.links[rel=next]` when present.
+- **Config loader**: uses `gopkg.in/yaml.v3` directly instead of `viper`. Env vars and flags are merged manually in `clientFromConfig`. The resolution order (flag > env > file) is preserved.
+- **`-v` short form for `--verbose`**: unavailable because cobra auto-binds `-v` to `--version`. Long form only.
+- **`--resolve`**: moved from persistent global flag to per-command flag on the 2 commands that actually resolve URNs (`campaigns list` and `campaign-groups list`). Advertising it as global was misleading when 23 other commands would silently ignore it.
