@@ -94,7 +94,11 @@ func runCampaignsList(cmd *cobra.Command, _ []string) error {
 	var resolved map[string]string
 	if jsonOut && resolveFlag(cmd) {
 		urns := uniqueCampaignGroupURNs(camps)
-		resolved = resolve.New(c, accountID).ResolveAll(cmd.Context(), urns)
+		r := resolve.New(c, accountID)
+		if v, _ := cmd.Root().PersistentFlags().GetBool("verbose"); v {
+			r.SetLogger(cmd.ErrOrStderr())
+		}
+		resolved = r.ResolveAll(cmd.Context(), urns)
 	}
 	return writeOutputWithResolved(cmd, camps, resolved, func() string {
 		if len(camps) == 0 {

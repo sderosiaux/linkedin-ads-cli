@@ -238,3 +238,20 @@ func TestResolveAdSegment_403FallsBack(t *testing.T) {
 		t.Errorf("expected URN fallback on 403, got %q", got)
 	}
 }
+
+func TestResolver_Logger(t *testing.T) {
+	r := New(nil, "")
+	var b strings.Builder
+	r.SetLogger(&b)
+	// purely-local locale URN — works without an HTTP client
+	_ = r.Resolve(context.Background(), "urn:li:locale:en_US")
+	if !strings.Contains(b.String(), "resolve: urn:li:locale:en_US") {
+		t.Errorf("expected log line, got: %q", b.String())
+	}
+	// second call should be cached
+	b.Reset()
+	_ = r.Resolve(context.Background(), "urn:li:locale:en_US")
+	if !strings.Contains(b.String(), "(cached)") {
+		t.Errorf("expected cached log line, got: %q", b.String())
+	}
+}

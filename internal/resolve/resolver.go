@@ -5,6 +5,8 @@ package resolve
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +31,7 @@ type Resolver struct {
 	client    *client.Client
 	accountID string
 	ttl       time.Duration
+	logger    io.Writer
 
 	mu    sync.RWMutex
 	cache map[string]entry
@@ -39,6 +42,13 @@ type Resolver struct {
 // The client may be nil for tests that only exercise the URN-fallback path.
 func New(c *client.Client, accountID string) *Resolver {
 	return &Resolver{client: c, accountID: accountID, ttl: defaultTTL, cache: map[string]entry{}}
+}
+
+// SetLogger attaches a writer to the resolver. When non-nil, every Resolve
+// call writes a one-line trace ("resolve: <urn> → <name> (cached)" or
+// "(fetched 120ms)") so callers can audit lookup activity under --verbose.
+func (r *Resolver) SetLogger(w io.Writer) {
+	r.logger = w
 }
 
 // Resolve looks up the display name for a URN. On cache miss it issues the
@@ -52,19 +62,33 @@ func (r *Resolver) Resolve(ctx context.Context, urn string) string {
 	r.mu.RLock()
 	if e, ok := r.cache[urn]; ok && time.Now().Before(e.expiresAt) {
 		r.mu.RUnlock()
+		r.log("resolve: %s → %s (cached)\n", urn, e.name)
 		return e.name
 	}
 	r.mu.RUnlock()
 
+	started := time.Now()
 	name := r.fetch(ctx, urn)
+	dur := time.Since(started)
 	if name != urn {
 		// Only cache successful lookups. When fetch fails it returns the
 		// original URN; caching that would suppress retries for r.ttl.
 		r.mu.Lock()
 		r.cache[urn] = entry{name: name, expiresAt: time.Now().Add(r.ttl)}
 		r.mu.Unlock()
+		r.log("resolve: %s → %s (fetched %dms)\n", urn, name, dur.Milliseconds())
+	} else {
+		r.log("resolve: %s → (miss) (%dms)\n", urn, dur.Milliseconds())
 	}
 	return name
+}
+
+// log writes a one-line trace to the configured logger if any.
+func (r *Resolver) log(format string, args ...any) {
+	if r.logger == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(r.logger, format, args...)
 }
 
 // ResolveAll resolves a batch of URNs in parallel and returns a map of urn->
