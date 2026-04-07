@@ -121,3 +121,57 @@ func TestLimitFlag_Default(t *testing.T) {
 		t.Errorf("default limit should be 0, got %d", got)
 	}
 }
+
+func TestTruncateURN(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, want string }{
+		{"urn:li:sponsoredCampaign:420247104", "...sponsoredCampaign:4202…"},
+		{"urn:li:sponsoredCampaign:42", "...sponsoredCampaign:42"},
+		{"urn:li:sponsoredCampaignGroup:674217704", "...sponsoredCampaignGroup:6742…"},
+		{"plain string", "plain string"},
+		{"urn:li:title:1", "...title:1"},
+	}
+	for _, c := range cases {
+		got := truncateURN(c.in, 4)
+		if got != c.want {
+			t.Errorf("truncateURN(%q): got %q want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatMoneyString(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, want string }{
+		{"1406.4072831443331", "$1,406.41"},
+		{"22.500000000000001", "$22.50"},
+		{"0", "$0.00"},
+		{"", ""},
+		{"abc", "abc"},
+		{"1000000.5", "$1,000,000.50"},
+	}
+	for _, c := range cases {
+		got := formatMoneyString(c.in)
+		if got != c.want {
+			t.Errorf("formatMoneyString(%q): got %q want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatPercent(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{0.0046, "0.46%"},
+		{0.0, "0.00%"},
+		{1.0, "100.00%"},
+		{0.59, "59.00%"},
+	}
+	for _, c := range cases {
+		got := formatPercent(c.in)
+		if got != c.want {
+			t.Errorf("formatPercent(%v): got %q want %q", c.in, got, c.want)
+		}
+	}
+}

@@ -55,8 +55,8 @@ func newLeadsPerformanceCmd() *cobra.Command {
 				var b strings.Builder
 				b.WriteString("FORM                                    IMPRESSIONS   CLICKS   OPENS   SUBMITS  COST\n")
 				for _, r := range rows {
-					fmt.Fprintf(&b, "%-40s %11d %8d %7d %8d %s\n",
-						truncate(r.Form, 40), r.Impressions, r.Clicks, r.LeadGenFormOpens, r.LeadSubmissions, r.CostInUsd)
+					fmt.Fprintf(&b, "%-40s %11s %8s %7d %8d %s\n",
+						truncate(truncateURN(r.Form, 4), 40), formatInt(r.Impressions), formatInt(r.Clicks), r.LeadGenFormOpens, r.LeadSubmissions, formatMoneyString(r.CostInUsd))
 				}
 				return b.String()
 			})

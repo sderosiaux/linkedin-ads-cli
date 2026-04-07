@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -163,6 +165,50 @@ func applyLimit(cmd *cobra.Command, data any) any {
 		return data
 	}
 	return v.Slice(0, n).Interface()
+}
+
+// truncateURN shortens a long LinkedIn URN like
+// "urn:li:sponsoredCampaign:420247104" to "...Campaign:4202…" — keeping the
+// resource kind plus keepTail trailing chars of the id, with ellipses on both
+// sides. Non-URN strings (no "urn:li:" prefix) pass through truncate(s, ...).
+// keepTail defaults to 4 when ≤ 0.
+func truncateURN(s string, keepTail int) string {
+	if !strings.HasPrefix(s, "urn:li:") {
+		return s
+	}
+	if keepTail <= 0 {
+		keepTail = 4
+	}
+	parts := strings.Split(s, ":")
+	if len(parts) < 4 {
+		return s
+	}
+	kind := parts[2]
+	id := parts[len(parts)-1]
+	if len(id) <= keepTail {
+		return "..." + kind + ":" + id
+	}
+	return "..." + kind + ":" + id[:keepTail] + "…"
+}
+
+// formatMoneyString parses a decimal string and renders it as "$1,406.41" with
+// US-style thousand separators rounded to 2 decimals. Empty / unparseable
+// values pass through. Negative values are rendered with a leading "-$".
+func formatMoneyString(s string) string {
+	if s == "" {
+		return s
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return s
+	}
+	return formatMoney(v)
+}
+
+// formatPercent formats a [0,1] ratio as a percentage with 2 decimals, e.g.
+// 0.0046 → "0.46%". Negative values render with a leading minus.
+func formatPercent(f float64) string {
+	return fmt.Sprintf("%.2f%%", f*100)
 }
 
 // applyCompact projects each element of a slice through fn (or fn applied once

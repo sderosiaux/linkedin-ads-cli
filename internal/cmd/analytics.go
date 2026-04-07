@@ -171,12 +171,15 @@ func pivotDisplay(r api.AnalyticsRow) string {
 }
 
 // formatAnalyticsRows renders an AnalyticsRow slice as a small terminal table.
+// URN pivot values are truncated and money is formatted with thousand
+// separators rounded to 2 decimals.
 func formatAnalyticsRows(rows []api.AnalyticsRow) string {
 	var b strings.Builder
-	b.WriteString("PIVOT_VALUE                    IMPR    CLICKS  COST_USD  CONV  LEADS\n")
+	b.WriteString("PIVOT                          IMPR    CLICKS    SPEND      CONV  LEADS\n")
 	for _, r := range rows {
-		fmt.Fprintf(&b, "%-30s %7d %7d %9s %5d %6d\n",
-			truncate(pivotDisplay(r), 30), r.Impressions, r.Clicks, r.CostInUsd, r.Conversions, r.OneClickLeads)
+		pivot := truncate(truncateURN(pivotDisplay(r), 4), 30)
+		fmt.Fprintf(&b, "%-30s %7s %7s %10s %5d %6d\n",
+			pivot, formatInt(r.Impressions), formatInt(r.Clicks), formatMoneyString(r.CostInUsd), r.Conversions, r.OneClickLeads)
 	}
 	return b.String()
 }
@@ -480,9 +483,9 @@ func formatCompare(aID, bID string, rowsA, rowsB []api.AnalyticsRow, metric stri
 	b := firstRow(rowsB)
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "                       A=%s        B=%s\n", aID, bID)
-	fmt.Fprintf(&sb, "Impressions:           %12d  %12d\n", a.Impressions, b.Impressions)
-	fmt.Fprintf(&sb, "Clicks:                %12d  %12d\n", a.Clicks, b.Clicks)
-	fmt.Fprintf(&sb, "Cost (USD):            %12s  %12s\n", a.CostInUsd, b.CostInUsd)
+	fmt.Fprintf(&sb, "Impressions:           %12s  %12s\n", formatInt(a.Impressions), formatInt(b.Impressions))
+	fmt.Fprintf(&sb, "Clicks:                %12s  %12s\n", formatInt(a.Clicks), formatInt(b.Clicks))
+	fmt.Fprintf(&sb, "Cost (USD):            %12s  %12s\n", formatMoneyString(a.CostInUsd), formatMoneyString(b.CostInUsd))
 	av := metricValue(a, metric)
 	bv := metricValue(b, metric)
 	delta := 0.0

@@ -81,8 +81,8 @@ func newConversionsPerformanceCmd() *cobra.Command {
 				var b strings.Builder
 				b.WriteString("CONVERSION                              IMPRESSIONS   CLICKS   CONV    COST\n")
 				for _, r := range rows {
-					fmt.Fprintf(&b, "%-40s %11d %8d %7d %s\n",
-						truncate(r.Conversion, 40), r.Impressions, r.Clicks, r.Conversions, r.CostInUsd)
+					fmt.Fprintf(&b, "%-40s %11s %8s %7d %s\n",
+						truncate(truncateURN(r.Conversion, 4), 40), formatInt(r.Impressions), formatInt(r.Clicks), r.Conversions, formatMoneyString(r.CostInUsd))
 				}
 				return b.String()
 			})
