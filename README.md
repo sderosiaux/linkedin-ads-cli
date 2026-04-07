@@ -8,7 +8,7 @@
 >
 > You don't need to read this README. Your agent does. Install it, run `linkedin-ads --help`, and let the LLM figure it out. Every command embeds its own usage guide, `--json` outputs structured data a model can parse without a bespoke adapter, and `--compact` strips the noise. Writes ask before firing, `--dry-run` shows the exact request, `--yes` unblocks scripts. This page is here because GitHub expects one.
 
-A CLI for the [LinkedIn Marketing API](https://learn.microsoft.com/en-us/linkedin/marketing/). Inspect ad accounts, campaign groups, campaigns, creatives, analytics, audiences, conversions, and lead forms. Create, update, and delete campaign groups and campaigns with a confirmation step.
+A CLI for the [LinkedIn Marketing API](https://learn.microsoft.com/en-us/linkedin/marketing/). Inspect ad accounts, campaign groups, campaigns, creatives, analytics, audiences, conversions, and lead forms. Create, update, and delete campaign groups, campaigns, and creatives. Upload images for ad creatives.
 
 ## Install
 
@@ -44,7 +44,7 @@ linkedin-ads use-account 12345678
 # ✓ Default account: 12345678
 ```
 
-The token lives at `~/.config/linkedin-ads/config.yaml` (mode `0600`). `LINKEDIN_ADS_TOKEN` as an env var always wins — useful for CI or when switching between accounts in scripts.
+The token lives at `$XDG_CONFIG_HOME/linkedin-ads/config.yaml` (`~/.config/...` when unset), mode `0600`. `LINKEDIN_ADS_TOKEN` as an env var always wins — useful for CI or when switching between accounts in scripts.
 
 LinkedIn versions its API by month. The binary ships with a recent default; bump it when LinkedIn releases a new version:
 
@@ -103,6 +103,7 @@ linkedin-ads analytics campaigns --start 2026-03-07 --end 2026-04-06
 linkedin-ads analytics creatives --campaign 12345
 
 # Demographics: JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION
+# (short forms auto-map to MEMBER_JOB_FUNCTION, MEMBER_COUNTRY_V2, etc.)
 linkedin-ads analytics demographics --campaign 12345 --pivot JOB_FUNCTION
 
 # Unique reach for a campaign
@@ -116,7 +117,7 @@ linkedin-ads analytics compare --a 12345 --b 67890 --metric ctr
 
 # Performance breakdown for conversions or lead forms
 linkedin-ads conversions performance
-linkedin-ads leads performance --form 55555
+linkedin-ads leads performance
 ```
 
 ### Writing
@@ -288,9 +289,9 @@ linkedin-ads --verbose accounts list
 | `LINKEDIN_ADS_TOKEN` env var | token | high |
 | `LINKEDIN_ADS_ACCOUNT` env var | default account | high |
 | `LINKEDIN_ADS_VERSION` env var | API version | high |
-| `~/.config/linkedin-ads/config.yaml` | token, default_account, api_version | fallback |
+| `$XDG_CONFIG_HOME/linkedin-ads/config.yaml` | token, default_account, api_version | fallback |
 
-Config file written by `linkedin-ads auth login` and `linkedin-ads use-account`:
+`$XDG_CONFIG_HOME` defaults to `~/.config` when unset. Config file written by `linkedin-ads auth login` and `linkedin-ads use-account`:
 
 ```yaml
 token: your-token-here
