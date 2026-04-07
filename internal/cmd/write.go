@@ -11,6 +11,7 @@ import (
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/confirm"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // fieldDiff captures a single human-readable field change for an update diff.
@@ -104,6 +105,9 @@ func executeWrite(cmd *cobra.Command, summary string, payload any, fn func() err
 		return nil
 	}
 	if !yesFlag(cmd) {
+		if !term.IsTerminal(int(os.Stdin.Fd())) { //nolint:gosec // Fd() fits in int on all supported platforms
+			return fmt.Errorf("stdin is not a terminal — pass --yes to skip confirmation")
+		}
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), summary); err != nil {
 			return err
 		}

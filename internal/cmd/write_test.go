@@ -78,6 +78,33 @@ func TestExecuteWriteYesRunsFn(t *testing.T) {
 	}
 }
 
+func TestExecuteWrite_RejectsNonTTYWithoutYes(t *testing.T) {
+	// Test stdin is a pipe (non-TTY), so executeWrite should reject without --yes.
+	root := newTestRoot()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+
+	cmd := &cobra.Command{
+		Use: "noop",
+		RunE: func(c *cobra.Command, _ []string) error {
+			return executeWrite(c, "POST /test", map[string]any{}, func() error {
+				t.Error("fn must NOT run without TTY and --yes")
+				return nil
+			})
+		},
+	}
+	root.AddCommand(cmd)
+	root.SetArgs([]string{"noop"})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-TTY stdin without --yes")
+	}
+	if !strings.Contains(err.Error(), "pass --yes") {
+		t.Errorf("error should mention --yes, got: %v", err)
+	}
+}
+
 // uuidV4Pattern matches the canonical 8-4-4-4-12 hex layout, ignoring version
 // nibble — the test only cares about shape.
 var uuidV4Pattern = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
