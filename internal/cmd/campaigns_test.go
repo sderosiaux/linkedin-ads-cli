@@ -186,6 +186,47 @@ func TestCampaignsBare_DelegatesToList(t *testing.T) {
 	}
 }
 
+func TestCampaignsList_StatusFilterWithLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{"id": 1, "name": "A1", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777", "campaignGroup": "urn:li:sponsoredCampaignGroup:111", "type": "SPONSORED_UPDATES", "objectiveType": "WEBSITE_VISIT", "costType": "CPC"},
+				{"id": 2, "name": "P1", "status": "PAUSED", "account": "urn:li:sponsoredAccount:777", "campaignGroup": "urn:li:sponsoredCampaignGroup:111", "type": "SPONSORED_UPDATES", "objectiveType": "WEBSITE_VISIT", "costType": "CPC"},
+				{"id": 3, "name": "A2", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777", "campaignGroup": "urn:li:sponsoredCampaignGroup:111", "type": "SPONSORED_UPDATES", "objectiveType": "WEBSITE_VISIT", "costType": "CPC"},
+			},
+			"metadata": map[string]any{},
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--limit", "1", "campaigns", "--status", "ACTIVE"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\nbody: %s", err, out.String())
+	}
+	if len(got) != 1 {
+		t.Errorf("expected 1 result, got %d: %s", len(got), out.String())
+	}
+	if got[0]["status"] != "ACTIVE" {
+		t.Errorf("expected ACTIVE, got: %v", got[0])
+	}
+}
+
 func TestCampaignsList_GroupFilter(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/adCampaigns" {

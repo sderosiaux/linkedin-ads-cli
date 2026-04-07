@@ -61,7 +61,13 @@ func runCampaignGroupsList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	statusFilter, _ := cmd.Flags().GetString("status")
-	groups, err := api.ListCampaignGroups(cmd.Context(), c, accountID, limitFlag(cmd))
+	// When filtering client-side, fetch all rows first — the API doesn't
+	// support server-side status filtering for campaign groups.
+	apiLimit := limitFlag(cmd)
+	if statusFilter != "" {
+		apiLimit = 0
+	}
+	groups, err := api.ListCampaignGroups(cmd.Context(), c, accountID, apiLimit)
 	if err != nil {
 		return err
 	}
@@ -73,6 +79,9 @@ func runCampaignGroupsList(cmd *cobra.Command, _ []string) error {
 			}
 		}
 		groups = filtered
+	}
+	if lim := limitFlag(cmd); lim > 0 && len(groups) > lim {
+		groups = groups[:lim]
 	}
 	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
 	var resolved map[string]string

@@ -61,7 +61,13 @@ func runCampaignsList(cmd *cobra.Command, _ []string) error {
 	}
 	groupID, _ := cmd.Flags().GetString("group")
 	statusFilter, _ := cmd.Flags().GetString("status")
-	camps, err := api.ListCampaigns(cmd.Context(), c, accountID, groupID, limitFlag(cmd))
+	// When filtering client-side by status, fetch all rows first — the API
+	// doesn't support server-side status filtering for campaigns.
+	apiLimit := limitFlag(cmd)
+	if statusFilter != "" {
+		apiLimit = 0
+	}
+	camps, err := api.ListCampaigns(cmd.Context(), c, accountID, groupID, apiLimit)
 	if err != nil {
 		return err
 	}
@@ -73,6 +79,9 @@ func runCampaignsList(cmd *cobra.Command, _ []string) error {
 			}
 		}
 		camps = filtered
+	}
+	if lim := limitFlag(cmd); lim > 0 && len(camps) > lim {
+		camps = camps[:lim]
 	}
 	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
 	var resolved map[string]string

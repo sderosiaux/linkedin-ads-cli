@@ -86,6 +86,50 @@ func TestCampaignGroupsBare_DelegatesToList(t *testing.T) {
 	}
 }
 
+func TestCampaignGroupsList_StatusFilterWithLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Return 4 groups: 2 ACTIVE, 2 PAUSED. --limit 1 --status ACTIVE
+		// should return 1 ACTIVE (not 0 due to premature pagination cutoff).
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{"id": 1, "name": "A1", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777"},
+				{"id": 2, "name": "P1", "status": "PAUSED", "account": "urn:li:sponsoredAccount:777"},
+				{"id": 3, "name": "A2", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777"},
+				{"id": 4, "name": "P2", "status": "PAUSED", "account": "urn:li:sponsoredAccount:777"},
+			},
+			"metadata": map[string]any{},
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--limit", "1", "campaign-groups", "--status", "ACTIVE"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\nbody: %s", err, out.String())
+	}
+	if len(got) != 1 {
+		t.Errorf("expected 1 result, got %d: %s", len(got), out.String())
+	}
+	if got[0]["status"] != "ACTIVE" {
+		t.Errorf("expected ACTIVE, got: %v", got[0])
+	}
+}
+
 func TestCampaignGroupsList_EmptyState_Terminal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"elements":[],"metadata":{}}`))
