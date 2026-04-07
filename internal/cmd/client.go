@@ -33,6 +33,16 @@ func clientFromConfig(cmd *cobra.Command) (*client.Client, *config.Config, error
 	if err != nil {
 		return nil, nil, err
 	}
+	// Env vars override file config (flag > env > file).
+	if v := os.Getenv("LINKEDIN_ADS_TOKEN"); v != "" {
+		c.Token = v
+	}
+	if v := os.Getenv("LINKEDIN_ADS_ACCOUNT"); v != "" {
+		c.DefaultAccount = v
+	}
+	if v := os.Getenv("LINKEDIN_ADS_VERSION"); v != "" {
+		c.APIVersion = v
+	}
 	if c.Token == "" {
 		return nil, nil, errors.New("no token — run 'linkedin-ads auth login' first")
 	}

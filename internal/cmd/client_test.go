@@ -138,6 +138,131 @@ func TestClientFromConfig_VersionDateInvalid(t *testing.T) {
 	}
 }
 
+func TestClientFromConfig_TokenEnvOverride(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	t.Setenv("LINKEDIN_ADS_TOKEN", "envtok")
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "filetok", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	cli, _, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	var out any
+	if err := cli.GetJSON(context.Background(), "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if gotAuth != "Bearer envtok" {
+		t.Errorf("Authorization: got %q, want Bearer envtok", gotAuth)
+	}
+}
+
+func TestClientFromConfig_AccountEnvOverride(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	t.Setenv("LINKEDIN_ADS_ACCOUNT", "envacct")
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", DefaultAccount: "fileacct", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	_, cfg, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if cfg.DefaultAccount != "envacct" {
+		t.Errorf("DefaultAccount: got %q, want envacct", cfg.DefaultAccount)
+	}
+}
+
+func TestClientFromConfig_VersionEnvOverride(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	var gotVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotVersion = r.Header.Get("Linkedin-Version")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	t.Setenv("LINKEDIN_ADS_VERSION", "202612")
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	cli, _, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	var out any
+	if err := cli.GetJSON(context.Background(), "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if gotVersion != "202612" {
+		t.Errorf("Linkedin-Version: got %q, want 202612", gotVersion)
+	}
+}
+
+func TestClientFromConfig_FlagBeatsEnv(t *testing.T) {
+	// no t.Parallel — t.Setenv mutates process env
+	var gotVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotVersion = r.Header.Get("Linkedin-Version")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	t.Setenv("LINKEDIN_ADS_VERSION", "202612")
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	if err := root.ParseFlags([]string{"--config", cfgPath, "--version-date", "202699"}); err != nil {
+		t.Fatal(err)
+	}
+	cli, _, err := clientFromConfig(root)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	var out any
+	if err := cli.GetJSON(context.Background(), "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if gotVersion != "202699" {
+		t.Errorf("Linkedin-Version: got %q, want 202699 (flag should beat env)", gotVersion)
+	}
+}
+
 func TestClientFromConfig_BaseURLEnvOverride(t *testing.T) {
 	// no t.Parallel — t.Setenv mutates process env
 	dir := t.TempDir()
