@@ -13,6 +13,44 @@ import (
 	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
 )
 
+func TestCampaignGroupsGet_Raw_DumpsUntypedFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/adAccounts/777/adCampaignGroups/111" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"id":111,"name":"Q1","status":"ACTIVE",
+			"account":"urn:li:sponsoredAccount:777",
+			"changeAuditStamps":{"created":{"time":1700000000000}},
+			"backfilled":true
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaign-groups", "get", "111", "--raw"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, `"changeAuditStamps"`) {
+		t.Errorf("expected raw changeAuditStamps, got: %s", s)
+	}
+	if !strings.Contains(s, `"backfilled": true`) {
+		t.Errorf("expected raw backfilled, got: %s", s)
+	}
+}
+
 func TestCampaignGroupsList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/adCampaignGroups" {

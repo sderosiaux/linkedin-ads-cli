@@ -106,7 +106,7 @@ func runCampaignsList(cmd *cobra.Command, _ []string) error {
 }
 
 func newCampaignsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Get a single campaign by id",
 		Args:  cobra.ExactArgs(1),
@@ -118,6 +118,9 @@ func newCampaignsGetCmd() *cobra.Command {
 			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
 			if err != nil {
 				return err
+			}
+			if rawFlag(cmd) {
+				return writeRawGet(cmd, c, "/adAccounts/"+accountID+"/adCampaigns/"+args[0])
 			}
 			camp, err := api.GetCampaign(cmd.Context(), c, accountID, args[0])
 			if err != nil {
@@ -144,6 +147,8 @@ func newCampaignsGetCmd() *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().Bool("raw", false, "Dump the full raw API response as JSON (bypass typed decode)")
+	return cmd
 }
 
 // newCampaignsTargetingCmd prints a campaign's targeting criteria — either the

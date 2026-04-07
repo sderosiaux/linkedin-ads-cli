@@ -104,7 +104,7 @@ func runCampaignGroupsList(cmd *cobra.Command, _ []string) error {
 }
 
 func newCampaignGroupsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Get a single campaign group by id",
 		Args:  cobra.ExactArgs(1),
@@ -117,6 +117,9 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if rawFlag(cmd) {
+				return writeRawGet(cmd, c, "/adAccounts/"+accountID+"/adCampaignGroups/"+args[0])
+			}
 			g, err := api.GetCampaignGroup(cmd.Context(), c, accountID, args[0])
 			if err != nil {
 				return err
@@ -127,6 +130,8 @@ func newCampaignGroupsGetCmd() *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().Bool("raw", false, "Dump the full raw API response as JSON (bypass typed decode)")
+	return cmd
 }
 
 func newCampaignGroupsCreateCmd() *cobra.Command {

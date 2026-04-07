@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
 
 	"github.com/spf13/cobra"
@@ -88,6 +91,43 @@ func resolveFlag(cmd *cobra.Command) bool {
 		return false
 	}
 	return b
+}
+
+// rawFlag returns the value of the local --raw flag for the command. Only
+// commands that wire this flag (the `get` family) will see a non-false value.
+// --raw is intentionally NOT persistent: a bare `linkedin-ads campaigns --raw`
+// would be ambiguous since list/get share a parent.
+func rawFlag(cmd *cobra.Command) bool {
+	b, err := cmd.Flags().GetBool("raw")
+	if err != nil {
+		return false
+	}
+	return b
+}
+
+// rawGetter is the subset of *client.Client used by the --raw codepath. A
+// local interface lets writeRawGet stay free of a hard dependency on the
+// client package in the output helpers and makes the helper trivially
+// testable with a fake.
+type rawGetter interface {
+	GetJSON(ctx context.Context, path string, query url.Values, out any) error
+}
+
+// writeRawGet is the shared --raw implementation for `get` commands. It
+// fetches path as an opaque json.RawMessage, pretty-prints it, and writes it
+// to the command's stdout — bypassing typed-struct decoding so callers see
+// the full API response including fields the CLI doesn't model.
+func writeRawGet(cmd *cobra.Command, c rawGetter, path string) error {
+	var raw json.RawMessage
+	if err := c.GetJSON(cmd.Context(), path, nil, &raw); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), buf.String())
+	return err
 }
 
 // limitFlag returns the value of the global --limit flag (0 when unset).

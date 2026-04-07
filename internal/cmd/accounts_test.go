@@ -152,6 +152,40 @@ func TestAccountsGet_JSON(t *testing.T) {
 	}
 }
 
+func TestAccountsGet_Raw_DumpsUntypedFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/adAccounts/12345" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":12345,"name":"Acme","status":"ACTIVE","type":"BUSINESS","currency":"USD","test":true,"notifiedOnCampaignOptimization":false}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "accounts", "get", "12345", "--raw"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	// --raw must preserve fields absent from the typed Account struct.
+	if !strings.Contains(s, `"test": true`) {
+		t.Errorf("expected raw test field, got: %s", s)
+	}
+	if !strings.Contains(s, `"notifiedOnCampaignOptimization": false`) {
+		t.Errorf("expected raw notifiedOnCampaignOptimization field, got: %s", s)
+	}
+}
+
 func TestAccountsBare_DelegatesToList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{

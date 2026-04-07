@@ -765,6 +765,47 @@ func TestCampaignsGet_TargetingSummary_Terminal(t *testing.T) {
 	}
 }
 
+func TestCampaignsGet_Raw_DumpsUntypedFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"id":10,"name":"X","status":"ACTIVE",
+			"account":"urn:li:sponsoredAccount:777",
+			"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+			"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+			"changeAuditStamps":{"created":{"time":1700000000000,"actor":"urn:li:person:42"}},
+			"pacingStrategy":"LIFETIME"
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "get", "10", "--raw"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	// --raw must preserve fields absent from the typed Campaign struct.
+	if !strings.Contains(s, `"changeAuditStamps"`) {
+		t.Errorf("expected raw changeAuditStamps, got: %s", s)
+	}
+	if !strings.Contains(s, `"pacingStrategy": "LIFETIME"`) {
+		t.Errorf("expected raw pacingStrategy, got: %s", s)
+	}
+}
+
 func TestCampaignsGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {

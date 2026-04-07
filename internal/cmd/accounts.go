@@ -55,7 +55,7 @@ func runAccountsList(cmd *cobra.Command, _ []string) error {
 }
 
 func newAccountsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Get a single ad account by id",
 		Args:  cobra.ExactArgs(1),
@@ -63,6 +63,9 @@ func newAccountsGetCmd() *cobra.Command {
 			c, _, err := clientFromConfig(cmd)
 			if err != nil {
 				return err
+			}
+			if rawFlag(cmd) {
+				return writeRawGet(cmd, c, "/adAccounts/"+args[0])
 			}
 			acct, err := api.GetAccount(cmd.Context(), c, args[0])
 			if err != nil {
@@ -74,6 +77,8 @@ func newAccountsGetCmd() *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().Bool("raw", false, "Dump the full raw API response as JSON (bypass typed decode)")
+	return cmd
 }
 
 // truncate shortens s to at most n runes, appending an ellipsis when truncated.

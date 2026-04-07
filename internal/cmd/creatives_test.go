@@ -12,6 +12,48 @@ import (
 	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
 )
 
+func TestCreativesGet_Raw_DumpsUntypedFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The bare /creatives/<urn> path is shared with the typed get; only
+		// the response shape difference matters here.
+		if !strings.HasPrefix(r.URL.Path, "/adAccounts/777/creatives/") {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"id":"urn:li:sponsoredCreative:1",
+			"status":"ACTIVE",
+			"intendedStatus":"ACTIVE",
+			"campaign":"urn:li:sponsoredCampaign:42",
+			"changeAuditStamps":{"created":{"time":1700000000000}},
+			"servingHoldReasons":["EXPIRED"]
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "creatives", "get", "1", "--raw"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, `"changeAuditStamps"`) {
+		t.Errorf("expected raw changeAuditStamps, got: %s", s)
+	}
+	if !strings.Contains(s, `"servingHoldReasons"`) {
+		t.Errorf("expected raw servingHoldReasons, got: %s", s)
+	}
+}
+
 func TestCreativesList_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/creatives" {

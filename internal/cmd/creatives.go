@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
@@ -225,7 +226,7 @@ func newCreativesUpdateStatusCmd() *cobra.Command {
 }
 
 func newCreativesGetCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Get a single creative by numeric id",
 		Args:  cobra.ExactArgs(1),
@@ -238,6 +239,10 @@ func newCreativesGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if rawFlag(cmd) {
+				encoded := url.QueryEscape(urn.Wrap(urn.Creative, args[0]))
+				return writeRawGet(cmd, c, "/adAccounts/"+accountID+"/creatives/"+encoded)
+			}
 			cr, err := api.GetCreative(cmd.Context(), c, accountID, args[0])
 			if err != nil {
 				return err
@@ -248,4 +253,6 @@ func newCreativesGetCmd() *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().Bool("raw", false, "Dump the full raw API response as JSON (bypass typed decode)")
+	return cmd
 }
