@@ -29,6 +29,7 @@ func newCampaignsCmd() *cobra.Command {
 		newCampaignsUpdateCmd(),
 		newCampaignsDeleteCmd(),
 		newCampaignsTargetingCmd(),
+		newCampaignsDiffCmd(),
 	)
 	return root
 }
