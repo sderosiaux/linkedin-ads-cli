@@ -263,15 +263,15 @@ func newAnalyticsReachCmd() *cobra.Command {
 			if end.Sub(start) > 92*24*time.Hour {
 				return errors.New("reach queries are limited to 92 days")
 			}
-			rows, err := api.GetSingleCampaignAnalytics(cmd.Context(), c, campaignID, start, end)
+			rows, err := api.GetReachAnalytics(cmd.Context(), c, campaignID, start, end)
 			if err != nil {
 				return err
 			}
 			return writeOutput(cmd, rows, func() string {
 				var b strings.Builder
-				b.WriteString("IMPR    CLICKS  COST_USD  REACH\n")
+				b.WriteString("IMPR    MEMBER_REACH  AUDIENCE_PEN\n")
 				for _, r := range rows {
-					fmt.Fprintf(&b, "%7d %7d %9s %7d\n", r.Impressions, r.Clicks, r.CostInUsd, r.Reach)
+					fmt.Fprintf(&b, "%7d %12d %12.6f\n", r.Impressions, r.MemberReach, r.AudiencePenetration)
 				}
 				return b.String()
 			}, compactAnalyticsRow)

@@ -308,3 +308,42 @@ func TestGetDailyTrendsAnalytics_CampaignScope(t *testing.T) {
 		t.Errorf("missing campaigns: %s", gotRaw)
 	}
 }
+
+func TestGetReachAnalytics(t *testing.T) {
+	t.Parallel()
+	var gotRaw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRaw = r.URL.RawQuery
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{
+					"impressions":            100,
+					"approximateMemberReach": 80,
+					"audiencePenetration":    0.05,
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetReachAnalytics(context.Background(), c, "42", start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len: %d", len(rows))
+	}
+	if rows[0].MemberReach != 80 {
+		t.Errorf("MemberReach: %d", rows[0].MemberReach)
+	}
+	if !strings.Contains(gotRaw, "approximateMemberReach") {
+		t.Errorf("missing reach fields: %s", gotRaw)
+	}
+	// Should NOT contain the full default fields like videoViews.
+	if strings.Contains(gotRaw, "videoViews") {
+		t.Errorf("reach should use reach-specific fields, not default: %s", gotRaw)
+	}
+}

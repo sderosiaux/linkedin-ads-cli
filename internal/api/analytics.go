@@ -24,6 +24,8 @@ type AnalyticsRow struct {
 	Conversions         int64          `json:"externalWebsiteConversions,omitempty"`
 	OneClickLeads       int64          `json:"oneClickLeads,omitempty"`
 	Reach               int64          `json:"approximateUniqueImpressions,omitempty"`
+	MemberReach         int64          `json:"approximateMemberReach,omitempty"`
+	AudiencePenetration float64        `json:"audiencePenetration,omitempty"`
 	VideoViews          int64          `json:"videoViews,omitempty"`
 	VideoStarts         int64          `json:"videoStarts,omitempty"`
 	VideoCompletions    int64          `json:"videoCompletions,omitempty"`
@@ -39,6 +41,10 @@ const defaultAnalyticsFields = "impressions,clicks,costInUsd,costInLocalCurrency
 	"externalWebsiteConversions,oneClickLeads,approximateUniqueImpressions," +
 	"pivotValues,dateRange,videoViews,videoStarts,videoCompletions," +
 	"videoFirstQuartileCompletions,videoMidpointCompletions,videoThirdQuartileCompletions"
+
+// reachAnalyticsFields is the field set for reach/frequency queries, matching
+// the MCP's REACH_METRICS.
+const reachAnalyticsFields = "approximateMemberReach,impressions,audiencePenetration,pivotValues,dateRange"
 
 // formatDateRange renders a LinkedIn Rest.li dateRange tuple. The parens and
 // colons MUST NOT be percent-escaped — pass through GetJSONRawQuery only.
@@ -98,6 +104,15 @@ func GetSingleCampaignGroupAnalytics(ctx context.Context, c *client.Client, grou
 	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN_GROUP&timeGranularity=ALL&dateRange=%s&campaignGroups=List(%s)",
 		formatDateRange(start, end), groupURN)
 	return decodeAnalytics(ctx, c, raw)
+}
+
+// GetReachAnalytics returns reach/frequency metrics for a single campaign,
+// using reach-specific fields (approximateMemberReach, audiencePenetration).
+func GetReachAnalytics(ctx context.Context, c *client.Client, campaignID string, start, end time.Time) ([]AnalyticsRow, error) {
+	campURN := EncodeURNForList(urn.Wrap(urn.Campaign, campaignID))
+	raw := fmt.Sprintf("q=analytics&pivot=CAMPAIGN&timeGranularity=ALL&dateRange=%s&campaigns=List(%s)",
+		formatDateRange(start, end), campURN)
+	return decodeAnalyticsWithFields(ctx, c, raw, reachAnalyticsFields)
 }
 
 // GetDailyTrendsAnalytics returns rows with timeGranularity=DAILY scoped to

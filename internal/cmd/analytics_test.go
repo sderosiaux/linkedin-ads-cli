@@ -273,7 +273,11 @@ func TestAnalyticsReach_JSON(t *testing.T) {
 		if !strings.Contains(raw, "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A42)") {
 			t.Errorf("missing campaign: %s", raw)
 		}
-		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0","approximateUniqueImpressions":900}]}`))
+		// Reach should use reach-specific fields, not the default set.
+		if !strings.Contains(raw, "approximateMemberReach") {
+			t.Errorf("missing reach-specific field approximateMemberReach: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"approximateMemberReach":500,"audiencePenetration":0.123}]}`))
 	}))
 	defer srv.Close()
 	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
@@ -290,7 +294,7 @@ func TestAnalyticsReach_JSON(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), `"approximateUniqueImpressions": 900`) {
+	if !strings.Contains(out.String(), `"approximateMemberReach": 500`) {
 		t.Errorf("got: %s", out.String())
 	}
 }
