@@ -49,6 +49,28 @@ var demographicsPivots = map[string]struct{}{
 	"MEMBER_REGION_V2":    {},
 }
 
+// pivotAliases maps short-form demographic pivots to the canonical MEMBER_
+// prefixed names that the LinkedIn API requires.
+var pivotAliases = map[string]string{
+	"JOB_FUNCTION": "MEMBER_JOB_FUNCTION",
+	"SENIORITY":    "MEMBER_SENIORITY",
+	"INDUSTRY":     "MEMBER_INDUSTRY",
+	"COMPANY_SIZE": "MEMBER_COMPANY_SIZE",
+	"COUNTRY":      "MEMBER_COUNTRY_V2",
+	"REGION":       "MEMBER_REGION_V2",
+	"JOB_TITLE":    "MEMBER_JOB_TITLE",
+	"COMPANY":      "MEMBER_COMPANY",
+}
+
+// canonicalizePivot maps short aliases to the MEMBER_ prefixed form that
+// LinkedIn requires. Already-canonical values pass through unchanged.
+func canonicalizePivot(pivot string) string {
+	if mapped, ok := pivotAliases[pivot]; ok {
+		return mapped
+	}
+	return pivot
+}
+
 // parseDateRange reads --start / --end (YYYY-MM-DD). End defaults to today,
 // start defaults to 30 days before end. Returns a clean error on bad input.
 func parseDateRange(cmd *cobra.Command) (time.Time, time.Time, error) {
@@ -197,6 +219,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 			if _, ok := demographicsPivots[pivot]; !ok {
 				return fmt.Errorf("invalid --pivot %q (want JOB_FUNCTION, INDUSTRY, SENIORITY, COMPANY_SIZE, COUNTRY, REGION, or MEMBER_* variants)", pivot)
 			}
+			pivot = canonicalizePivot(pivot)
 			c, _, err := clientFromConfig(cmd)
 			if err != nil {
 				return err

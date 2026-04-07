@@ -148,8 +148,9 @@ func TestAnalyticsCreatives_JSON(t *testing.T) {
 func TestAnalyticsDemographics_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "pivot=JOB_FUNCTION") {
-			t.Errorf("missing pivot: %s", raw)
+		// Short-form JOB_FUNCTION should be canonicalized to MEMBER_JOB_FUNCTION.
+		if !strings.Contains(raw, "pivot=MEMBER_JOB_FUNCTION") {
+			t.Errorf("expected canonicalized pivot=MEMBER_JOB_FUNCTION: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[{"impressions":7,"clicks":1,"costInUsd":"0.10"}]}`))
 	}))
@@ -231,6 +232,35 @@ func TestAnalyticsDemographics_MemberPivot(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"impressions": 3`) {
 		t.Errorf("got: %s", out.String())
+	}
+}
+
+func TestAnalyticsDemographics_ShortPivotCanonicalized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.RawQuery
+		if !strings.Contains(raw, "pivot=MEMBER_SENIORITY") {
+			t.Errorf("expected canonicalized MEMBER_SENIORITY, got: %s", raw)
+		}
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"clicks":0,"costInUsd":"0"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--json",
+		"analytics", "demographics",
+		"--campaign", "42", "--pivot", "SENIORITY",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
 	}
 }
 
