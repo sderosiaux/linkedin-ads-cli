@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -69,6 +70,25 @@ func canonicalizePivot(pivot string) string {
 		return mapped
 	}
 	return pivot
+}
+
+// derivedFlag returns the effective value of --derived for the command.
+// Default is ON in terminal mode and OFF in --json mode unless the flag has
+// been explicitly set.
+func derivedFlag(cmd *cobra.Command) bool {
+	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+	if cmd.Flags().Changed("derived") {
+		v, _ := cmd.Flags().GetBool("derived")
+		return v
+	}
+	return !jsonOut
+}
+
+// addDerivedFlag wires --derived on a command. The default value is true so
+// boolean flag conventions hold; the actual default is computed by
+// derivedFlag() based on json/terminal mode.
+func addDerivedFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool("derived", true, "Show CTR/CPC/CPM/CPL columns (default: on in terminal, off in --json)")
 }
 
 // limitAnalyticsRows truncates the rows slice to --limit when set. Call this
@@ -151,13 +171,30 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 				return err
 			}
 			rows = limitAnalyticsRows(cmd, rows)
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
+			return writeAnalyticsRows(cmd, rows)
 		},
 	}
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	cmd.Flags().String("granularity", "ALL", "DAILY, MONTHLY, or ALL")
+	addDerivedFlag(cmd)
 	return cmd
+}
+
+// writeAnalyticsRows is the shared output path for all analytics commands. It
+// honours --derived (terminal columns + JSON _derived field).
+func writeAnalyticsRows(cmd *cobra.Command, rows []api.AnalyticsRow) error {
+	derived := derivedFlag(cmd)
+	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+	if jsonOut {
+		if !derived {
+			return writeOutput(cmd, rows, func() string { return "" }, compactAnalyticsRow)
+		}
+		return writeOutput(cmd, rowsWithDerived(rows), func() string { return "" })
+	}
+	return writeOutput(cmd, rows, func() string {
+		return formatAnalyticsRows(rows, derived)
+	})
 }
 
 // pivotDisplay returns the best available pivot identifier for terminal output.
@@ -171,17 +208,55 @@ func pivotDisplay(r api.AnalyticsRow) string {
 }
 
 // formatAnalyticsRows renders an AnalyticsRow slice as a small terminal table.
-// URN pivot values are truncated and money is formatted with thousand
-// separators rounded to 2 decimals.
-func formatAnalyticsRows(rows []api.AnalyticsRow) string {
+// When derived is true, CTR/CPC/CPM/CPL columns are appended.
+func formatAnalyticsRows(rows []api.AnalyticsRow, derived bool) string {
 	var b strings.Builder
-	b.WriteString("PIVOT                          IMPR    CLICKS    SPEND      CONV  LEADS\n")
+	if derived {
+		b.WriteString("PIVOT                          IMPR    CLICKS  CTR     CPC      CPM        SPEND      LEADS  CPL\n")
+	} else {
+		b.WriteString("PIVOT                          IMPR    CLICKS    SPEND      CONV  LEADS\n")
+	}
 	for _, r := range rows {
 		pivot := truncate(truncateURN(pivotDisplay(r), 4), 30)
-		fmt.Fprintf(&b, "%-30s %7s %7s %10s %5d %6d\n",
-			pivot, formatInt(r.Impressions), formatInt(r.Clicks), formatMoneyString(r.CostInUsd), r.Conversions, r.OneClickLeads)
+		if derived {
+			d := r.DerivedMetrics()
+			leads := r.OneClickLeads + r.Conversions
+			fmt.Fprintf(&b, "%-30s %7s %7s %7s %8s %10s %10s %6d %9s\n",
+				pivot,
+				formatInt(r.Impressions), formatInt(r.Clicks),
+				formatPercent(d["ctr"]),
+				formatMoney(d["cpc"]),
+				formatMoney(d["cpm"]),
+				formatMoneyString(r.CostInUsd),
+				leads,
+				formatMoney(d["cpl"]))
+		} else {
+			fmt.Fprintf(&b, "%-30s %7s %7s %10s %5d %6d\n",
+				pivot, formatInt(r.Impressions), formatInt(r.Clicks), formatMoneyString(r.CostInUsd), r.Conversions, r.OneClickLeads)
+		}
 	}
 	return b.String()
+}
+
+// rowsWithDerived wraps each AnalyticsRow with its computed _derived map for
+// JSON consumers. The wire shape mirrors AnalyticsRow with an extra _derived
+// key — we marshal twice (raw row → map, then add the key) so all original
+// JSON tags survive untouched.
+func rowsWithDerived(rows []api.AnalyticsRow) []map[string]any {
+	out := make([]map[string]any, 0, len(rows))
+	for i := range rows {
+		raw, err := json.Marshal(rows[i])
+		if err != nil {
+			continue
+		}
+		m := map[string]any{}
+		if err := json.Unmarshal(raw, &m); err != nil {
+			continue
+		}
+		m["_derived"] = rows[i].DerivedMetrics()
+		out = append(out, m)
+	}
+	return out
 }
 
 func newAnalyticsCreativesCmd() *cobra.Command {
@@ -211,13 +286,14 @@ func newAnalyticsCreativesCmd() *cobra.Command {
 				return err
 			}
 			rows = limitAnalyticsRows(cmd, rows)
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
+			return writeAnalyticsRows(cmd, rows)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	cmd.Flags().String("granularity", "ALL", "DAILY, MONTHLY, or ALL")
+	addDerivedFlag(cmd)
 	return cmd
 }
 
@@ -250,7 +326,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 				return err
 			}
 			rows = limitAnalyticsRows(cmd, rows)
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
+			return writeAnalyticsRows(cmd, rows)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")
@@ -330,12 +406,13 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 				return err
 			}
 			rows = limitAnalyticsRows(cmd, rows)
-			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
+			return writeAnalyticsRows(cmd, rows)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (overrides --account)")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
+	addDerivedFlag(cmd)
 	return cmd
 }
 
@@ -443,6 +520,7 @@ func newAnalyticsCompareCmd() *cobra.Command {
 	cmd.Flags().String("metric", "spend", "spend, impressions, clicks, ctr, or cpc")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
+	addDerivedFlag(cmd)
 	return cmd
 }
 

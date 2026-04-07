@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
@@ -51,12 +52,32 @@ func newLeadsPerformanceCmd() *cobra.Command {
 			if lim := limitFlag(cmd); lim > 0 && len(rows) > lim {
 				rows = rows[:lim]
 			}
+			derived := derivedFlag(cmd)
 			return writeOutput(cmd, rows, func() string {
 				var b strings.Builder
-				b.WriteString("FORM                                    IMPRESSIONS   CLICKS   OPENS   SUBMITS  COST\n")
+				if derived {
+					b.WriteString("FORM                                    IMPRESSIONS   CLICKS   OPENS   SUBMITS  SPEND       CTR     CPM\n")
+				} else {
+					b.WriteString("FORM                                    IMPRESSIONS   CLICKS   OPENS   SUBMITS  COST\n")
+				}
 				for _, r := range rows {
-					fmt.Fprintf(&b, "%-40s %11s %8s %7d %8d %s\n",
-						truncate(truncateURN(r.Form, 4), 40), formatInt(r.Impressions), formatInt(r.Clicks), r.LeadGenFormOpens, r.LeadSubmissions, formatMoneyString(r.CostInUsd))
+					name := truncate(truncateURN(r.Form, 4), 40)
+					if derived {
+						ctr := 0.0
+						cpm := 0.0
+						if r.Impressions > 0 {
+							ctr = float64(r.Clicks) / float64(r.Impressions)
+							if v, err := strconv.ParseFloat(r.CostInUsd, 64); err == nil {
+								cpm = v / float64(r.Impressions) * 1000
+							}
+						}
+						fmt.Fprintf(&b, "%-40s %11s %8s %7d %8d %10s %7s %8s\n",
+							name, formatInt(r.Impressions), formatInt(r.Clicks), r.LeadGenFormOpens, r.LeadSubmissions,
+							formatMoneyString(r.CostInUsd), formatPercent(ctr), formatMoney(cpm))
+					} else {
+						fmt.Fprintf(&b, "%-40s %11s %8s %7d %8d %s\n",
+							name, formatInt(r.Impressions), formatInt(r.Clicks), r.LeadGenFormOpens, r.LeadSubmissions, formatMoneyString(r.CostInUsd))
+					}
 				}
 				return b.String()
 			})
@@ -64,6 +85,7 @@ func newLeadsPerformanceCmd() *cobra.Command {
 	}
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
+	cmd.Flags().Bool("derived", true, "Show CTR/CPM columns (default: on in terminal, off in --json)")
 	return cmd
 }
 

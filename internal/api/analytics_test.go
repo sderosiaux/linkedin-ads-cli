@@ -347,3 +347,41 @@ func TestGetReachAnalytics(t *testing.T) {
 		t.Errorf("reach should use reach-specific fields, not default: %s", gotRaw)
 	}
 }
+
+func TestDerivedMetrics(t *testing.T) {
+	t.Parallel()
+	r := AnalyticsRow{
+		Impressions:   10000,
+		Clicks:        100,
+		CostInUsd:     "200",
+		Conversions:   5,
+		OneClickLeads: 5,
+	}
+	m := r.DerivedMetrics()
+	if got := m["ctr"]; got != 0.01 {
+		t.Errorf("ctr: %v", got)
+	}
+	if got := m["cpc"]; got != 2 {
+		t.Errorf("cpc: %v", got)
+	}
+	if got := m["cpm"]; got != 20 {
+		t.Errorf("cpm: %v", got)
+	}
+	// CPL = 200 / (5+5) = 20
+	if got := m["cpl"]; got != 20 {
+		t.Errorf("cpl: %v", got)
+	}
+	// conversionRate = 5/100 = 0.05
+	if got := m["conversionRate"]; got != 0.05 {
+		t.Errorf("conversionRate: %v", got)
+	}
+
+	// zero impressions: ctr/cpm collapse, cpc still works if clicks>0
+	z := AnalyticsRow{Impressions: 0, Clicks: 0, CostInUsd: "10"}
+	zm := z.DerivedMetrics()
+	for k := range zm {
+		if zm[k] != 0 {
+			t.Errorf("expected %s=0 for empty row, got %v", k, zm[k])
+		}
+	}
+}

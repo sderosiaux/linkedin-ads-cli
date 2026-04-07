@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
@@ -32,6 +33,39 @@ type AnalyticsRow struct {
 	VideoQ1             int64          `json:"videoFirstQuartileCompletions,omitempty"`
 	VideoMidpoint       int64          `json:"videoMidpointCompletions,omitempty"`
 	VideoQ3             int64          `json:"videoThirdQuartileCompletions,omitempty"`
+}
+
+// DerivedMetrics computes the standard ad-tech derived metrics from the raw
+// counters in r. All values are returned as float64 for stable JSON encoding.
+// Division-by-zero collapses to 0.
+//
+//   - ctr            = clicks / impressions
+//   - cpc            = cost / clicks
+//   - cpm            = cost / impressions * 1000
+//   - cpl            = cost / (oneClickLeads + externalWebsiteConversions)
+//   - conversionRate = externalWebsiteConversions / clicks
+func (r *AnalyticsRow) DerivedMetrics() map[string]float64 {
+	m := map[string]float64{
+		"ctr":            0,
+		"cpc":            0,
+		"cpm":            0,
+		"cpl":            0,
+		"conversionRate": 0,
+	}
+	cost, _ := strconv.ParseFloat(r.CostInUsd, 64)
+	if r.Impressions > 0 {
+		m["ctr"] = float64(r.Clicks) / float64(r.Impressions)
+		m["cpm"] = cost / float64(r.Impressions) * 1000
+	}
+	if r.Clicks > 0 {
+		m["cpc"] = cost / float64(r.Clicks)
+		m["conversionRate"] = float64(r.Conversions) / float64(r.Clicks)
+	}
+	totalLeads := r.OneClickLeads + r.Conversions
+	if totalLeads > 0 {
+		m["cpl"] = cost / float64(totalLeads)
+	}
+	return m
 }
 
 // defaultAnalyticsFields is the set of metrics to request from /adAnalytics.

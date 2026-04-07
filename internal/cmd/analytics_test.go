@@ -551,6 +551,82 @@ func TestAnalyticsCompare_MutualExclusion(t *testing.T) {
 	}
 }
 
+func TestAnalyticsCampaigns_DerivedTerminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[
+			{"impressions":10000,"clicks":100,"costInUsd":"200","externalWebsiteConversions":2,"oneClickLeads":3,"pivotValues":["urn:li:sponsoredCampaign:42"]}
+		]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "analytics", "campaigns"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	// Default in terminal mode is --derived on
+	for _, want := range []string{"CTR", "CPC", "CPM", "CPL", "1.00%", "$2.00"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in derived terminal output:\n%s", want, s)
+		}
+	}
+}
+
+func TestAnalyticsCampaigns_DerivedJSONOptIn(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[
+			{"impressions":1000,"clicks":50,"costInUsd":"100","externalWebsiteConversions":5,"oneClickLeads":0,"pivotValues":["urn:li:sponsoredCampaign:1"]}
+		]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	// JSON without --derived: no _derived field
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "analytics", "campaigns"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), `"_derived"`) {
+		t.Errorf("JSON should NOT include _derived without --derived: %s", out.String())
+	}
+
+	// JSON with --derived: _derived field present
+	root = NewRootCmd()
+	out = &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "analytics", "campaigns", "--derived"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"_derived"`) {
+		t.Errorf("JSON --derived should include _derived field: %s", out.String())
+	}
+	if !strings.Contains(out.String(), `"ctr"`) {
+		t.Errorf("expected ctr key inside _derived: %s", out.String())
+	}
+}
+
 func TestAnalyticsCampaigns_BadDate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
