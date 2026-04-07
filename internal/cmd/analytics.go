@@ -125,13 +125,23 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 	return cmd
 }
 
+// pivotDisplay returns the best available pivot identifier for terminal output.
+// LinkedIn returns pivotValues (array) in current API versions; legacy
+// pivotValue (string) is kept as fallback.
+func pivotDisplay(r api.AnalyticsRow) string {
+	if len(r.PivotValues) > 0 {
+		return r.PivotValues[0]
+	}
+	return r.PivotValue
+}
+
 // formatAnalyticsRows renders an AnalyticsRow slice as a small terminal table.
 func formatAnalyticsRows(rows []api.AnalyticsRow) string {
 	var b strings.Builder
 	b.WriteString("PIVOT_VALUE                    IMPR    CLICKS  COST_USD  CONV  LEADS\n")
 	for _, r := range rows {
 		fmt.Fprintf(&b, "%-30s %7d %7d %9s %5d %6d\n",
-			truncate(r.PivotValue, 30), r.Impressions, r.Clicks, r.CostInUsd, r.Conversions, r.OneClickLeads)
+			truncate(pivotDisplay(r), 30), r.Impressions, r.Clicks, r.CostInUsd, r.Conversions, r.OneClickLeads)
 	}
 	return b.String()
 }

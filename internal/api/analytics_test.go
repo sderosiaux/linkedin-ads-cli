@@ -73,6 +73,37 @@ func TestGetCampaignAnalytics_BuildsRawQuery(t *testing.T) {
 	}
 }
 
+func TestAnalyticsRow_PivotValues(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"elements": []map[string]any{
+				{
+					"impressions": 10,
+					"clicks":      1,
+					"costInUsd":   "0.50",
+					"pivotValues": []string{"urn:li:sponsoredCampaign:42"},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	rows, err := GetCampaignAnalytics(context.Background(), c, "12345", start, end, "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len: %d", len(rows))
+	}
+	if len(rows[0].PivotValues) != 1 || rows[0].PivotValues[0] != "urn:li:sponsoredCampaign:42" {
+		t.Errorf("PivotValues: %v", rows[0].PivotValues)
+	}
+}
+
 func TestGetCreativeAnalytics(t *testing.T) {
 	t.Parallel()
 	var gotRaw string

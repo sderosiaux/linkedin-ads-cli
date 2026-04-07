@@ -16,6 +16,7 @@ type AnalyticsRow struct {
 	DateRange           map[string]any `json:"dateRange,omitempty"`
 	Pivot               string         `json:"pivot,omitempty"`
 	PivotValue          string         `json:"pivotValue,omitempty"`
+	PivotValues         []string       `json:"pivotValues,omitempty"`
 	Impressions         int64          `json:"impressions"`
 	Clicks              int64          `json:"clicks"`
 	CostInUsd           string         `json:"costInUsd"`
