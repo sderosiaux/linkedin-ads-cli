@@ -115,3 +115,126 @@ func TestResolveUnknownKindFallsBack(t *testing.T) {
 		t.Errorf("expected URN fallback, got %q", got)
 	}
 }
+
+func TestParseLocaleURN(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, want string }{
+		{"urn:li:locale:en_US", "en_US"},
+		{"urn:li:locale:fr_FR", "fr_FR"},
+		{"urn:li:locale:", ""},
+		{"urn:li:other:en_US", ""},
+	}
+	for _, tc := range cases {
+		if got := parseLocaleURN(tc.in); got != tc.want {
+			t.Errorf("parseLocaleURN(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestParseStaffCountRangeURN(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, want string }{
+		{"urn:li:staffCountRange:(1,1)", "1-1 employees"},
+		{"urn:li:staffCountRange:(2,10)", "2-10 employees"},
+		{"urn:li:staffCountRange:(10001,)", "10001+ employees"},
+		{"urn:li:staffCountRange:", ""},
+		{"urn:li:staffCountRange:1-10", ""},   // missing parens
+		{"urn:li:staffCountRange:(,10)", ""},  // empty lo
+		{"urn:li:staffCountRange:(1-10)", ""}, // no comma
+	}
+	for _, tc := range cases {
+		if got := parseStaffCountRangeURN(tc.in); got != tc.want {
+			t.Errorf("parseStaffCountRangeURN(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestResolveLocaleAndStaffCountRange_NoHTTP(t *testing.T) {
+	t.Parallel()
+	// client nil — these URNs must resolve locally.
+	r := New(nil, "")
+	if got := r.Resolve(context.Background(), "urn:li:locale:en_US"); got != "en_US" {
+		t.Errorf("locale: got %q", got)
+	}
+	if got := r.Resolve(context.Background(), "urn:li:staffCountRange:(2,10)"); got != "2-10 employees" {
+		t.Errorf("staffCountRange: got %q", got)
+	}
+	if got := r.Resolve(context.Background(), "urn:li:staffCountRange:(10001,)"); got != "10001+ employees" {
+		t.Errorf("staffCountRange open: got %q", got)
+	}
+}
+
+func TestResolveTitle_HappyPath(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/titles/") {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		// Verify the raw query wasn't percent-mangled.
+		if !strings.Contains(r.URL.RawQuery, "(country:US,language:en)") {
+			t.Errorf("raw query mangled: %q", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"id":11405,"name":{"en_US":"Software Engineer"}}`))
+	}))
+	defer srv.Close()
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	r := New(c, "777")
+	got := r.Resolve(context.Background(), "urn:li:title:11405")
+	if got != "Software Engineer" {
+		t.Errorf("expected 'Software Engineer', got %q", got)
+	}
+}
+
+func TestResolveTitle_FallsBackOnEmptyBody(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":42}`)) // no name / localizedName / title
+	}))
+	defer srv.Close()
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	r := New(c, "777")
+	urn := "urn:li:title:42"
+	if got := r.Resolve(context.Background(), urn); got != urn {
+		t.Errorf("expected URN fallback on empty body, got %q", got)
+	}
+}
+
+func TestResolveGeo_DefaultLocalizedName(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":101174742,"defaultLocalizedName":{"value":"United States"}}`))
+	}))
+	defer srv.Close()
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	r := New(c, "777")
+	if got := r.Resolve(context.Background(), "urn:li:geo:101174742"); got != "United States" {
+		t.Errorf("geo: got %q", got)
+	}
+}
+
+func TestResolveOrganization_LocalizedName(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":1009,"localizedName":"Microsoft"}`))
+	}))
+	defer srv.Close()
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	r := New(c, "777")
+	if got := r.Resolve(context.Background(), "urn:li:organization:1009"); got != "Microsoft" {
+		t.Errorf("org: got %q", got)
+	}
+}
+
+func TestResolveAdSegment_403FallsBack(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
+	r := New(c, "777")
+	urn := "urn:li:adSegment:62755117"
+	if got := r.Resolve(context.Background(), urn); got != urn {
+		t.Errorf("expected URN fallback on 403, got %q", got)
+	}
+}
