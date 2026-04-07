@@ -668,6 +668,88 @@ func TestCampaignsDelete_DryRun(t *testing.T) {
 	}
 }
 
+func TestCampaignsTargeting_MultipleIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/adAccounts/777/adCampaigns/10":
+			_, _ = w.Write([]byte(`{
+				"id":10,"name":"Architect NAMER","status":"ACTIVE",
+				"account":"urn:li:sponsoredAccount:777",
+				"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+				"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+				"targetingCriteria":{
+					"include":{"and":[
+						{"or":{"urn:li:adTargetingFacet:titles":["urn:li:title:1"]}}
+					]}
+				}
+			}`))
+		case "/adAccounts/777/adCampaigns/20":
+			_, _ = w.Write([]byte(`{
+				"id":20,"name":"Developer NAMER","status":"ACTIVE",
+				"account":"urn:li:sponsoredAccount:777",
+				"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+				"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+				"targetingCriteria":{
+					"include":{"and":[
+						{"or":{"urn:li:adTargetingFacet:profileLocations":["urn:li:geo:9999"]}}
+					]}
+				}
+			}`))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "targeting", "10", "20"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	for _, want := range []string{
+		"━━━ Architect NAMER (10) ━━━",
+		"━━━ Developer NAMER (20) ━━━",
+		"titles (1)",
+		"profileLocations (1)",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in output:\n%s", want, s)
+		}
+	}
+}
+
+func TestCampaignsTargeting_AllActiveAndGroupMutex(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "targeting", "10", "--all-active"})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error for mutex")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutex hint, got: %v", err)
+	}
+}
+
 func TestCampaignsTargeting_Terminal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {

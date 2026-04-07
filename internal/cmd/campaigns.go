@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
+	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/resolve"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/urn"
 	"github.com/spf13/cobra"
@@ -153,12 +155,13 @@ func newCampaignsGetCmd() *cobra.Command {
 
 // newCampaignsTargetingCmd prints a campaign's targeting criteria — either the
 // raw TargetingCriteria struct as JSON, or a facet-by-facet terminal breakdown
-// with optional URN resolution.
+// with optional URN resolution. Accepts one or more campaign ids, or fetches
+// them via --all-active / --group <id>.
 func newCampaignsTargetingCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "targeting <id>",
-		Short: "Show a campaign's targeting criteria (include/exclude facets)",
-		Args:  cobra.ExactArgs(1),
+		Use:   "targeting [id...]",
+		Short: "Show targeting criteria for one or more campaigns",
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, cfg, err := clientFromConfig(cmd)
 			if err != nil {
@@ -168,21 +171,116 @@ func newCampaignsTargetingCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			camp, err := api.GetCampaign(cmd.Context(), c, accountID, args[0])
+			allActive, _ := cmd.Flags().GetBool("all-active")
+			groupID, _ := cmd.Flags().GetString("group")
+
+			modes := 0
+			if len(args) > 0 {
+				modes++
+			}
+			if allActive {
+				modes++
+			}
+			if groupID != "" {
+				modes++
+			}
+			if modes == 0 {
+				return errors.New("provide at least one campaign id, --all-active, or --group <id>")
+			}
+			if modes > 1 {
+				return errors.New("positional ids, --all-active, and --group are mutually exclusive")
+			}
+
+			ids, err := resolveTargetingCampaignIDs(cmd, c, accountID, args, allActive, groupID)
 			if err != nil {
 				return err
 			}
+			if len(ids) == 0 {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "No campaigns matched.")
+				return err
+			}
+
+			camps := make([]*api.Campaign, 0, len(ids))
+			for _, id := range ids {
+				camp, gerr := api.GetCampaign(cmd.Context(), c, accountID, id)
+				if gerr != nil {
+					return fmt.Errorf("get campaign %s: %w", id, gerr)
+				}
+				camps = append(camps, camp)
+			}
+
 			var resolver *resolve.Resolver
 			if resolveFlag(cmd) {
 				resolver = resolve.New(c, accountID)
 			}
-			return writeOutput(cmd, camp.TargetingCriteria, func() string {
-				return formatTargeting(cmd, camp, resolver)
-			})
+
+			jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+			if jsonOut {
+				if len(camps) == 1 {
+					return writeOutput(cmd, camps[0].TargetingCriteria, func() string { return "" })
+				}
+				payload := make([]map[string]any, 0, len(camps))
+				for _, c := range camps {
+					payload = append(payload, map[string]any{
+						"id":                c.ID,
+						"name":              c.Name,
+						"targetingCriteria": c.TargetingCriteria,
+					})
+				}
+				return writeOutput(cmd, payload, func() string { return "" })
+			}
+
+			var b strings.Builder
+			for i, c := range camps {
+				if len(camps) > 1 {
+					if i > 0 {
+						b.WriteString("\n")
+					}
+					fmt.Fprintf(&b, "━━━ %s (%d) ━━━\n", c.Name, c.ID)
+				}
+				b.WriteString(formatTargeting(cmd, c, resolver))
+			}
+			_, err = fmt.Fprint(cmd.OutOrStdout(), b.String())
+			return err
 		},
 	}
 	cmd.Flags().Bool("resolve", false, "Resolve facet URNs to human-readable names")
+	cmd.Flags().Bool("all-active", false, "Dump targeting for every ACTIVE campaign in the account")
+	cmd.Flags().String("group", "", "Dump targeting for every campaign in the given campaign group id")
 	return cmd
+}
+
+// resolveTargetingCampaignIDs picks the campaign id list to operate on for
+// `campaigns targeting`. Exactly one of args / allActive / groupID is set by
+// the time this is called (the caller validates mutual exclusivity).
+func resolveTargetingCampaignIDs(cmd *cobra.Command, c *client.Client, accountID string, args []string, allActive bool, groupID string) ([]string, error) {
+	switch {
+	case len(args) > 0:
+		return args, nil
+	case allActive:
+		camps, err := api.ListCampaigns(cmd.Context(), c, accountID, "", 0)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]string, 0, len(camps))
+		for _, x := range camps {
+			if strings.EqualFold(x.Status, "ACTIVE") {
+				out = append(out, strconv.FormatInt(x.ID, 10))
+			}
+		}
+		return out, nil
+	case groupID != "":
+		camps, err := api.ListCampaigns(cmd.Context(), c, accountID, groupID, 0)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]string, 0, len(camps))
+		for _, x := range camps {
+			out = append(out, strconv.FormatInt(x.ID, 10))
+		}
+		return out, nil
+	}
+	return nil, nil
 }
 
 // summarizeFacets renders a facet→values map as a compact comma-separated
