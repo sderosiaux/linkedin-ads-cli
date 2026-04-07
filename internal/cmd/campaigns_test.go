@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/config"
 )
@@ -804,19 +806,26 @@ func TestCampaignsTargeting_Terminal(t *testing.T) {
 }
 
 func TestCampaignsGet_TargetingSummary_Terminal(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{
-			"id":10,"name":"X","status":"ACTIVE",
-			"account":"urn:li:sponsoredAccount:777",
-			"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
-			"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
-			"targetingCriteria":{
-				"include":{"and":[
-					{"or":{"urn:li:adTargetingFacet:titles":["urn:li:title:1","urn:li:title:2"]}}
-				]},
-				"exclude":{"or":{"urn:li:adTargetingFacet:employers":["urn:li:organization:1"]}}
-			}
-		}`))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/adAccounts/777/adCampaigns/10":
+			_, _ = w.Write([]byte(`{
+				"id":10,"name":"X","status":"ACTIVE",
+				"account":"urn:li:sponsoredAccount:777",
+				"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+				"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+				"targetingCriteria":{
+					"include":{"and":[
+						{"or":{"urn:li:adTargetingFacet:titles":["urn:li:title:1","urn:li:title:2"]}}
+					]},
+					"exclude":{"or":{"urn:li:adTargetingFacet:employers":["urn:li:organization:1"]}}
+				}
+			}`))
+		case "/adAnalytics":
+			_, _ = w.Write([]byte(`{"elements":[]}`))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer srv.Close()
 	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
@@ -888,12 +897,68 @@ func TestCampaignsGet_Raw_DumpsUntypedFields(t *testing.T) {
 	}
 }
 
+func TestCampaignsGet_RunDurationAndPacing_Terminal(t *testing.T) {
+	// Started 60 days ago.
+	startMs := time.Now().AddDate(0, 0, -60).UnixMilli()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/adAccounts/777/adCampaigns/10":
+			body := `{
+				"id":10,"name":"X","status":"ACTIVE",
+				"account":"urn:li:sponsoredAccount:777",
+				"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+				"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+				"dailyBudget":{"amount":"40","currencyCode":"USD"},
+				"runSchedule":{"start":` + strconv.FormatInt(startMs, 10) + `},
+				"servingStatuses":["PAUSED","STOPPED"]
+			}`
+			_, _ = w.Write([]byte(body))
+		case "/adAnalytics":
+			_, _ = w.Write([]byte(`{"elements":[{"impressions":1000,"clicks":100,"costInUsd":"450"}]}`))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "get", "10"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	for _, want := range []string{
+		"Run duration:",
+		"Daily budget:   $40.00",
+		"Last 30d spend: $450.00",
+		"Avg daily:      $15.00 (38% of cap)",
+		"Serving:        PAUSED, STOPPED",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in output:\n%s", want, s)
+		}
+	}
+}
+
 func TestCampaignsGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {
-			t.Errorf("path: %s", r.URL.Path)
+		switch r.URL.Path {
+		case "/adAccounts/777/adCampaigns/10":
+			_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
+		case "/adAnalytics":
+			_, _ = w.Write([]byte(`{"elements":[]}`))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"id":10,"name":"X","status":"ACTIVE","account":"urn:li:sponsoredAccount:777","campaignGroup":"urn:li:sponsoredCampaignGroup:111","type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC"}`))
 	}))
 	defer srv.Close()
 

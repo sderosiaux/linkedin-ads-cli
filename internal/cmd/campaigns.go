@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sderosiaux/linkedin-ads-cli/internal/api"
 	"github.com/sderosiaux/linkedin-ads-cli/internal/client"
@@ -125,33 +127,108 @@ func newCampaignsGetCmd() *cobra.Command {
 			if rawFlag(cmd) {
 				return writeRawGet(cmd, c, "/adAccounts/"+accountID+"/adCampaigns/"+args[0])
 			}
-			camp, err := api.GetCampaign(cmd.Context(), c, accountID, args[0])
-			if err != nil {
-				return err
+			// Fetch the campaign and (in parallel) the last 30d analytics so the
+			// terminal block can show pacing. JSON output stays minimal — the raw
+			// API fields are what LLM consumers want.
+			ctx := cmd.Context()
+			var (
+				camp    *api.Campaign
+				campErr error
+				rows    []api.AnalyticsRow
+				rowsErr error
+				wg      sync.WaitGroup
+				end     = time.Now().UTC()
+				start   = end.AddDate(0, 0, -30)
+			)
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				camp, campErr = api.GetCampaign(ctx, c, accountID, args[0])
+			}()
+			go func() {
+				defer wg.Done()
+				rows, rowsErr = api.GetSingleCampaignAnalytics(ctx, c, args[0], start, end)
+			}()
+			wg.Wait()
+			if campErr != nil {
+				return campErr
 			}
+			// Don't fail when analytics 403/empty — surface as missing pacing.
+			_ = rowsErr
 			return writeOutput(cmd, camp, func() string {
-				var b strings.Builder
-				fmt.Fprintf(&b, "ID:        %d\nName:      %s\nStatus:    %s\nType:      %s\nObjective: %s\nCostType:  %s\nGroup:     %s\nAccount:   %s\n",
-					camp.ID, camp.Name, camp.Status, camp.Type, camp.Objective, camp.CostType, camp.CampaignGroup, camp.Account)
-				if camp.TargetingCriteria != nil {
-					inc := summarizeFacets(camp.TargetingCriteria.IncludedFacets())
-					exc := summarizeFacets(camp.TargetingCriteria.ExcludedFacets())
-					if inc != "" || exc != "" {
-						b.WriteString("Targeting:\n")
-						if inc != "" {
-							fmt.Fprintf(&b, "  include: %s\n", inc)
-						}
-						if exc != "" {
-							fmt.Fprintf(&b, "  exclude: %s\n", exc)
-						}
-					}
-				}
-				return b.String()
+				return formatCampaignGet(camp, rows)
 			})
 		},
 	}
 	cmd.Flags().Bool("raw", false, "Dump the full raw API response as JSON (bypass typed decode)")
 	return cmd
+}
+
+// formatCampaignGet renders the terminal block for campaigns get. Pacing
+// fields (run duration, daily budget, last 30d spend, avg daily, serving) are
+// shown when the analytics call succeeded.
+func formatCampaignGet(camp *api.Campaign, rows []api.AnalyticsRow) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "ID:             %d\nName:           %s\nStatus:         %s\nType:           %s\nObjective:      %s\nCostType:       %s\nGroup:          %s\nAccount:        %s\n",
+		camp.ID, camp.Name, camp.Status, camp.Type, camp.Objective, camp.CostType, camp.CampaignGroup, camp.Account)
+
+	if camp.TargetingCriteria != nil {
+		inc := summarizeFacets(camp.TargetingCriteria.IncludedFacets())
+		exc := summarizeFacets(camp.TargetingCriteria.ExcludedFacets())
+		if inc != "" || exc != "" {
+			b.WriteString("Targeting:\n")
+			if inc != "" {
+				fmt.Fprintf(&b, "  include: %s\n", inc)
+			}
+			if exc != "" {
+				fmt.Fprintf(&b, "  exclude: %s\n", exc)
+			}
+		}
+	}
+
+	// Pacing block
+	b.WriteString("\n")
+	runDays := 0
+	if camp.RunSchedule != nil && camp.RunSchedule.Start > 0 {
+		startedAt := time.UnixMilli(camp.RunSchedule.Start).UTC()
+		runDays = int(time.Since(startedAt).Hours() / 24)
+		if runDays < 0 {
+			runDays = 0
+		}
+		fmt.Fprintf(&b, "Run duration:   %d days (started %s)\n", runDays, startedAt.Format(dateLayout))
+	}
+	dailyBudget := 0.0
+	if camp.DailyBudget != nil {
+		if v, err := strconv.ParseFloat(camp.DailyBudget.Amount, 64); err == nil {
+			dailyBudget = v
+			fmt.Fprintf(&b, "Daily budget:   %s\n", formatMoney(v))
+		}
+	}
+	var spend30d float64
+	for _, r := range rows {
+		if v, err := strconv.ParseFloat(r.CostInUsd, 64); err == nil {
+			spend30d += v
+		}
+	}
+	if spend30d > 0 || len(rows) > 0 {
+		fmt.Fprintf(&b, "Last 30d spend: %s\n", formatMoney(spend30d))
+	}
+	if dailyBudget > 0 && (runDays > 0 || spend30d > 0) {
+		denom := runDays
+		if denom > 30 || denom == 0 {
+			denom = 30
+		}
+		avg := spend30d / float64(denom)
+		pct := 0.0
+		if dailyBudget > 0 {
+			pct = avg / dailyBudget * 100
+		}
+		fmt.Fprintf(&b, "Avg daily:      %s (%.0f%% of cap)\n", formatMoney(avg), pct)
+	}
+	if len(camp.ServingStatuses) > 0 {
+		fmt.Fprintf(&b, "Serving:        %s\n", strings.Join(camp.ServingStatuses, ", "))
+	}
+	return b.String()
 }
 
 // newCampaignsTargetingCmd prints a campaign's targeting criteria — either the
