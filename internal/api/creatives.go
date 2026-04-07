@@ -131,9 +131,9 @@ type CreateInlineCreativeInput struct {
 	CTALabel       string
 }
 
-// CreateInlineCreative creates a creative with inline post content via the
-// ?action=createInline endpoint. Returns the new resource id.
-func CreateInlineCreative(ctx context.Context, c *client.Client, accountID string, in *CreateInlineCreativeInput) (string, error) {
+// BuildInlineCreativeBody builds the deeply nested request body for
+// createInline. Exported so the cmd layer can preview it in --dry-run.
+func BuildInlineCreativeBody(accountID string, in *CreateInlineCreativeInput) map[string]any {
 	post := map[string]any{
 		"adContext": map[string]any{
 			"dscAdAccount": urn.Wrap(urn.Account, accountID),
@@ -167,7 +167,13 @@ func CreateInlineCreative(ctx context.Context, c *client.Client, accountID strin
 	if in.Name != "" {
 		creative["name"] = in.Name
 	}
-	body := map[string]any{"creative": creative}
+	return map[string]any{"creative": creative}
+}
+
+// CreateInlineCreative creates a creative with inline post content via the
+// ?action=createInline endpoint. Returns the new resource id.
+func CreateInlineCreative(ctx context.Context, c *client.Client, accountID string, in *CreateInlineCreativeInput) (string, error) {
+	body := BuildInlineCreativeBody(accountID, in)
 	return c.PostJSON(ctx, fmt.Sprintf("/adAccounts/%s/creatives?action=createInline", accountID), body, nil)
 }
 
@@ -175,7 +181,7 @@ func CreateInlineCreative(ctx context.Context, c *client.Client, accountID strin
 // intendedStatus. creativeURN is the full URN (urn:li:sponsoredCreative:123)
 // or a bare numeric id.
 func UpdateCreativeStatus(ctx context.Context, c *client.Client, accountID, creativeURN, status string) error {
-	encoded := url.PathEscape(urn.Wrap(urn.Creative, creativeURN))
+	encoded := url.QueryEscape(urn.Wrap(urn.Creative, creativeURN))
 	body := map[string]any{
 		"patch": map[string]any{
 			"$set": map[string]any{
@@ -189,7 +195,7 @@ func UpdateCreativeStatus(ctx context.Context, c *client.Client, accountID, crea
 // GetCreative fetches a single creative by its bare numeric id. The URN is
 // built and URL-encoded before placing it in the path segment.
 func GetCreative(ctx context.Context, c *client.Client, accountID, creativeID string) (*Creative, error) {
-	encodedURN := url.PathEscape(urn.Wrap(urn.Creative, creativeID))
+	encodedURN := url.QueryEscape(urn.Wrap(urn.Creative, creativeID))
 	var cr Creative
 	if err := c.GetJSON(ctx, "/adAccounts/"+accountID+"/creatives/"+encodedURN, nil, &cr); err != nil {
 		return nil, err

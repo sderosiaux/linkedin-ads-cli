@@ -152,7 +152,8 @@ func newCreativesCreateInlineCmd() *cobra.Command {
 				CTALabel:       cta,
 			}
 			summary := fmt.Sprintf("POST /adAccounts/%s/creatives?action=createInline", accountID)
-			return executeWrite(cmd, summary, in, func() error {
+			body := api.BuildInlineCreativeBody(accountID, in)
+			return executeWrite(cmd, summary, body, func() error {
 				id, err := api.CreateInlineCreative(cmd.Context(), c, accountID, in)
 				if err != nil {
 					return err

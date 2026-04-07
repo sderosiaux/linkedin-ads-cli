@@ -31,13 +31,12 @@ func TestListLeadForms(t *testing.T) {
 				{
 					"id":             1,
 					"name":           "EBook download",
-					"status":         "ACTIVE",
-					"account":        "urn:li:sponsoredAccount:12345",
-					"locale":         map[string]any{"country": "US", "language": "en"},
-					"headline":       "Get the eBook",
-					"description":    "Free download",
-					"createdAt":      1700000000000,
-					"lastModifiedAt": 1710000000000,
+					"state":          "SUBMITTED",
+					"owner":          map[string]any{"sponsoredAccount": "urn:li:sponsoredAccount:12345"},
+					"creationLocale": map[string]any{"country": "US", "language": "en"},
+					"versionId":      1,
+					"created":        1700000000000,
+					"lastModified":   1710000000000,
 				},
 			},
 			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
@@ -57,11 +56,14 @@ func TestListLeadForms(t *testing.T) {
 	if f.ID != 1 || f.Name != "EBook download" {
 		t.Errorf("form: %+v", f)
 	}
-	if f.Locale == nil || f.Locale.Country != "US" || f.Locale.Language != "en" {
-		t.Errorf("locale: %+v", f.Locale)
+	if f.State != "SUBMITTED" {
+		t.Errorf("state: %q", f.State)
 	}
-	if f.Headline != "Get the eBook" {
-		t.Errorf("headline: %q", f.Headline)
+	if f.CreationLocale == nil || f.CreationLocale.Country != "US" {
+		t.Errorf("creationLocale: %+v", f.CreationLocale)
+	}
+	if f.VersionID != 1 {
+		t.Errorf("versionId: %d", f.VersionID)
 	}
 }
 

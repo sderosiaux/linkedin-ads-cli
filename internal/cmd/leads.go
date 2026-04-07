@@ -92,10 +92,10 @@ func newLeadsFormsListCmd() *cobra.Command {
 					return fmt.Sprintf("No lead-gen forms for account %s.\n", accountID)
 				}
 				var b strings.Builder
-				b.WriteString("ID         NAME                STATUS    HEADLINE\n")
+				b.WriteString("ID         NAME                STATE     VERSION\n")
 				for _, f := range forms {
-					fmt.Fprintf(&b, "%-10d %-19s %-9s %s\n",
-						f.ID, truncate(f.Name, 19), f.Status, truncate(f.Headline, 40))
+					fmt.Fprintf(&b, "%-10d %-19s %-9s %d\n",
+						f.ID, truncate(f.Name, 19), f.State, f.VersionID)
 				}
 				return b.String()
 			})

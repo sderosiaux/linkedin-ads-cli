@@ -23,7 +23,7 @@ func TestLeadsFormsList_JSON(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
-				{"id": 1, "name": "Form A", "status": "ACTIVE", "account": "urn:li:sponsoredAccount:777"},
+				{"id": 1, "name": "Form A", "state": "SUBMITTED", "owner": map[string]any{"sponsoredAccount": "urn:li:sponsoredAccount:777"}, "versionId": 1},
 			},
 			"paging": map[string]any{"start": 0, "count": 1, "total": 1},
 		})

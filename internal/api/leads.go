@@ -12,16 +12,16 @@ import (
 )
 
 // LeadForm is a LinkedIn lead generation form decoded from /leadForms.
+// Field names match the actual LinkedIn API response (state, not status; owner, not account).
 type LeadForm struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Status         string  `json:"status"`
-	Account        string  `json:"account"`
-	Locale         *Locale `json:"locale,omitempty"`
-	Headline       string  `json:"headline,omitempty"`
-	Description    string  `json:"description,omitempty"`
-	CreatedAt      int64   `json:"createdAt,omitempty"`
-	LastModifiedAt int64   `json:"lastModifiedAt,omitempty"`
+	ID             int64          `json:"id"`
+	Name           string         `json:"name"`
+	State          string         `json:"state"`
+	Owner          map[string]any `json:"owner,omitempty"`
+	CreationLocale *Locale        `json:"creationLocale,omitempty"`
+	VersionID      int64          `json:"versionId,omitempty"`
+	Created        int64          `json:"created,omitempty"`
+	LastModified   int64          `json:"lastModified,omitempty"`
 }
 
 // leadFormsPage is the response envelope for lead forms listing.
