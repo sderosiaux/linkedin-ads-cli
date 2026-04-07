@@ -74,6 +74,9 @@ func newConversionsPerformanceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if lim := limitFlag(cmd); lim > 0 && len(rows) > lim {
+				rows = rows[:lim]
+			}
 			return writeOutput(cmd, rows, func() string {
 				var b strings.Builder
 				b.WriteString("CONVERSION                              IMPRESSIONS   CLICKS   CONV    COST\n")

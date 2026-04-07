@@ -71,6 +71,18 @@ func canonicalizePivot(pivot string) string {
 	return pivot
 }
 
+// limitAnalyticsRows truncates the rows slice to --limit when set. Call this
+// before writeOutput so the terminal closure (which captures `rows`) also sees
+// the limited slice. writeOutput's internal applyLimit handles JSON, but the
+// terminal formatter closure captures the Go variable — not the `data` arg —
+// so we must pre-truncate.
+func limitAnalyticsRows(cmd *cobra.Command, rows []api.AnalyticsRow) []api.AnalyticsRow {
+	if lim := limitFlag(cmd); lim > 0 && len(rows) > lim {
+		return rows[:lim]
+	}
+	return rows
+}
+
 // parseDateRange reads --start / --end (YYYY-MM-DD). End defaults to today,
 // start defaults to 30 days before end. Returns a clean error on bad input.
 func parseDateRange(cmd *cobra.Command) (time.Time, time.Time, error) {
@@ -138,6 +150,7 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows = limitAnalyticsRows(cmd, rows)
 			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
@@ -194,6 +207,7 @@ func newAnalyticsCreativesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows = limitAnalyticsRows(cmd, rows)
 			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
@@ -232,6 +246,7 @@ func newAnalyticsDemographicsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows = limitAnalyticsRows(cmd, rows)
 			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}
@@ -267,6 +282,7 @@ func newAnalyticsReachCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows = limitAnalyticsRows(cmd, rows)
 			return writeOutput(cmd, rows, func() string {
 				var b strings.Builder
 				b.WriteString("IMPR    MEMBER_REACH  AUDIENCE_PEN\n")
@@ -310,6 +326,7 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows = limitAnalyticsRows(cmd, rows)
 			return writeOutput(cmd, rows, func() string { return formatAnalyticsRows(rows) }, compactAnalyticsRow)
 		},
 	}

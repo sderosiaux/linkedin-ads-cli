@@ -353,6 +353,39 @@ func TestAnalyticsDailyTrends_AccountDefault(t *testing.T) {
 	}
 }
 
+func TestAnalyticsDailyTrends_LimitTerminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Return 5 rows — limit should truncate to 2.
+		_, _ = w.Write([]byte(`{"elements":[
+			{"impressions":1,"clicks":0,"costInUsd":"0"},
+			{"impressions":2,"clicks":0,"costInUsd":"0"},
+			{"impressions":3,"clicks":0,"costInUsd":"0"},
+			{"impressions":4,"clicks":0,"costInUsd":"0"},
+			{"impressions":5,"clicks":0,"costInUsd":"0"}
+		]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--limit", "2", "analytics", "daily-trends"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	// Terminal output: header + 2 data rows = 3 non-empty lines.
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 3 {
+		t.Errorf("expected 3 lines (header+2 rows) with --limit 2, got %d:\n%s", len(lines), out.String())
+	}
+}
+
 func TestAnalyticsCompare_TwoCampaigns(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
