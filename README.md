@@ -1,5 +1,7 @@
 # linkedin-ads-cli
 
+**🌐 [sderosiaux.github.io/linkedin-ads-cli](https://sderosiaux.github.io/linkedin-ads-cli/)** — landing page for non-technical users
+
 [![CI](https://github.com/sderosiaux/linkedin-ads-cli/actions/workflows/ci.yaml/badge.svg)](https://github.com/sderosiaux/linkedin-ads-cli/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/sderosiaux/linkedin-ads-cli)](https://github.com/sderosiaux/linkedin-ads-cli/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sderosiaux/linkedin-ads-cli)](go.mod)
