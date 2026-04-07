@@ -286,6 +286,9 @@ func TestTruncate(t *testing.T) {
 		{"abcdef", 5, "abcd…"},
 		{"abc", 1, "a"},
 		{"abc", 0, ""},
+		{"こんにちは世界", 5, "こんにち…"},  // multibyte: truncates by rune, not byte
+		{"日本語テスト", 6, "日本語テスト"},  // exact fit
+		{"日本語テスト!", 6, "日本語テス…"}, // one over
 	}
 	for _, tc := range cases {
 		if got := truncate(tc.in, tc.n); got != tc.want {
