@@ -48,10 +48,16 @@ func Save(path string, c *Config) error {
 }
 
 // DefaultPath returns the default location of the config file:
-// ~/.config/linkedin-ads/config.yaml.
+// ~/.config/linkedin-ads/config.yaml. It prefers os.UserConfigDir (which
+// returns ~/.config on Linux/macOS) and falls back to os.UserHomeDir.
 func DefaultPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "linkedin-ads", "config.yaml")
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "linkedin-ads", "config.yaml")
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "linkedin-ads", "config.yaml")
+	}
+	return filepath.Join(".config", "linkedin-ads", "config.yaml")
 }
 
 // CheckPerms returns a non-empty warning string when path exists and has any
