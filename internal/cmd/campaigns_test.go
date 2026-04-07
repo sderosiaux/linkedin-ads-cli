@@ -668,6 +668,103 @@ func TestCampaignsDelete_DryRun(t *testing.T) {
 	}
 }
 
+func TestCampaignsTargeting_Terminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"id":10,"name":"Architect NAMER","status":"ACTIVE",
+			"account":"urn:li:sponsoredAccount:777",
+			"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+			"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+			"targetingCriteria":{
+				"include":{"and":[
+					{"or":{"urn:li:adTargetingFacet:titles":["urn:li:title:1","urn:li:title:2"]}},
+					{"or":{"urn:li:adTargetingFacet:profileLocations":["urn:li:geo:101174742"]}}
+				]},
+				"exclude":{"or":{"urn:li:adTargetingFacet:employers":["urn:li:organization:1009"]}}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "targeting", "10"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	for _, want := range []string{
+		"Targeting for Architect NAMER (10)",
+		"INCLUDE:",
+		"titles (2)",
+		"urn:li:title:1",
+		"profileLocations (1)",
+		"EXCLUDE:",
+		"employers (1)",
+		"urn:li:organization:1009",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in output:\n%s", want, s)
+		}
+	}
+}
+
+func TestCampaignsGet_TargetingSummary_Terminal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"id":10,"name":"X","status":"ACTIVE",
+			"account":"urn:li:sponsoredAccount:777",
+			"campaignGroup":"urn:li:sponsoredCampaignGroup:111",
+			"type":"SPONSORED_UPDATES","objectiveType":"WEBSITE_VISIT","costType":"CPC",
+			"targetingCriteria":{
+				"include":{"and":[
+					{"or":{"urn:li:adTargetingFacet:titles":["urn:li:title:1","urn:li:title:2"]}}
+				]},
+				"exclude":{"or":{"urn:li:adTargetingFacet:employers":["urn:li:organization:1"]}}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601", DefaultAccount: "777"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "campaigns", "get", "10"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v\n%s", err, out.String())
+	}
+	s := out.String()
+	for _, want := range []string{
+		"Targeting:",
+		"include: titles(2)",
+		"exclude: employers(1)",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in output:\n%s", want, s)
+		}
+	}
+}
+
 func TestCampaignsGet_JSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/adAccounts/777/adCampaigns/10" {

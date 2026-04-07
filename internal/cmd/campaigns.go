@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,7 @@ func newCampaignsCmd() *cobra.Command {
 		newCampaignsCreateCmd(),
 		newCampaignsUpdateCmd(),
 		newCampaignsDeleteCmd(),
+		newCampaignsTargetingCmd(),
 	)
 	return root
 }
@@ -122,10 +124,136 @@ func newCampaignsGetCmd() *cobra.Command {
 				return err
 			}
 			return writeOutput(cmd, camp, func() string {
-				return fmt.Sprintf("ID:        %d\nName:      %s\nStatus:    %s\nType:      %s\nObjective: %s\nCostType:  %s\nGroup:     %s\nAccount:   %s\n",
+				var b strings.Builder
+				fmt.Fprintf(&b, "ID:        %d\nName:      %s\nStatus:    %s\nType:      %s\nObjective: %s\nCostType:  %s\nGroup:     %s\nAccount:   %s\n",
 					camp.ID, camp.Name, camp.Status, camp.Type, camp.Objective, camp.CostType, camp.CampaignGroup, camp.Account)
+				if camp.TargetingCriteria != nil {
+					inc := summarizeFacets(camp.TargetingCriteria.IncludedFacets())
+					exc := summarizeFacets(camp.TargetingCriteria.ExcludedFacets())
+					if inc != "" || exc != "" {
+						b.WriteString("Targeting:\n")
+						if inc != "" {
+							fmt.Fprintf(&b, "  include: %s\n", inc)
+						}
+						if exc != "" {
+							fmt.Fprintf(&b, "  exclude: %s\n", exc)
+						}
+					}
+				}
+				return b.String()
 			})
 		},
+	}
+}
+
+// newCampaignsTargetingCmd prints a campaign's targeting criteria — either the
+// raw TargetingCriteria struct as JSON, or a facet-by-facet terminal breakdown
+// with optional URN resolution.
+func newCampaignsTargetingCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "targeting <id>",
+		Short: "Show a campaign's targeting criteria (include/exclude facets)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, cfg, err := clientFromConfig(cmd)
+			if err != nil {
+				return err
+			}
+			accountID, err := accountIDFromFlagOrConfig(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			camp, err := api.GetCampaign(cmd.Context(), c, accountID, args[0])
+			if err != nil {
+				return err
+			}
+			var resolver *resolve.Resolver
+			if resolveFlag(cmd) {
+				resolver = resolve.New(c, accountID)
+			}
+			return writeOutput(cmd, camp.TargetingCriteria, func() string {
+				return formatTargeting(cmd, camp, resolver)
+			})
+		},
+	}
+	cmd.Flags().Bool("resolve", false, "Resolve facet URNs to human-readable names")
+	return cmd
+}
+
+// summarizeFacets renders a facet→values map as a compact comma-separated
+// "facet(n)" string sorted by facet name. Returns "" on empty input. Facet
+// URN prefixes are stripped so urn:li:adTargetingFacet:titles becomes titles.
+func summarizeFacets(facets map[string][]string) string {
+	if len(facets) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(facets))
+	for k := range facets {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s(%d)", shortFacetName(k), len(facets[k])))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// shortFacetName strips the urn:li:adTargetingFacet: prefix from a facet URN.
+func shortFacetName(facet string) string {
+	const prefix = "urn:li:adTargetingFacet:"
+	return strings.TrimPrefix(facet, prefix)
+}
+
+// formatTargeting renders a campaign's TargetingCriteria as a human-readable
+// block. When resolver is non-nil, URNs are annotated with their resolved name
+// after an em-dash.
+func formatTargeting(cmd *cobra.Command, camp *api.Campaign, resolver *resolve.Resolver) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Targeting for %s (%d)\n", camp.Name, camp.ID)
+	if camp.TargetingCriteria == nil {
+		b.WriteString("\n(no targeting criteria)\n")
+		return b.String()
+	}
+	inc := camp.TargetingCriteria.IncludedFacets()
+	exc := camp.TargetingCriteria.ExcludedFacets()
+	if len(inc) == 0 && len(exc) == 0 {
+		b.WriteString("\n(empty targeting criteria)\n")
+		return b.String()
+	}
+	if len(inc) > 0 {
+		b.WriteString("\nINCLUDE:\n")
+		writeFacets(cmd, &b, inc, resolver)
+	}
+	if len(exc) > 0 {
+		b.WriteString("\nEXCLUDE:\n")
+		writeFacets(cmd, &b, exc, resolver)
+	}
+	return b.String()
+}
+
+// writeFacets writes the facet→values body of INCLUDE/EXCLUDE sections, sorted
+// by facet name for stable output. Resolved names (when resolver is non-nil)
+// are appended after an em-dash on each value line.
+func writeFacets(cmd *cobra.Command, b *strings.Builder, facets map[string][]string, resolver *resolve.Resolver) {
+	keys := make([]string, 0, len(facets))
+	for k := range facets {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vals := facets[k]
+		fmt.Fprintf(b, "  %s (%d)\n", shortFacetName(k), len(vals))
+		for _, v := range vals {
+			if resolver != nil {
+				name := resolver.Resolve(cmd.Context(), v)
+				if name != "" && name != v {
+					fmt.Fprintf(b, "    %s — %s\n", v, name)
+					continue
+				}
+			}
+			fmt.Fprintf(b, "    %s\n", v)
+		}
 	}
 }
 

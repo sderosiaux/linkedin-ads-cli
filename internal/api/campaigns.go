@@ -11,19 +11,64 @@ import (
 // Campaign is a LinkedIn ad campaign decoded from
 // /adAccounts/{accountId}/adCampaigns.
 type Campaign struct {
-	ID            int64      `json:"id"`
-	Name          string     `json:"name"`
-	Status        string     `json:"status"`
-	Account       string     `json:"account"`
-	CampaignGroup string     `json:"campaignGroup"`
-	Type          string     `json:"type"`
-	Objective     string     `json:"objectiveType"`
-	Locale        *Locale    `json:"locale,omitempty"`
-	DailyBudget   *Money     `json:"dailyBudget,omitempty"`
-	TotalBudget   *Money     `json:"totalBudget,omitempty"`
-	RunSchedule   *DateRange `json:"runSchedule,omitempty"`
-	CostType      string     `json:"costType"`
-	UnitCost      *Money     `json:"unitCost,omitempty"`
+	ID                 int64              `json:"id"`
+	Name               string             `json:"name"`
+	Status             string             `json:"status"`
+	Account            string             `json:"account"`
+	CampaignGroup      string             `json:"campaignGroup"`
+	Type               string             `json:"type"`
+	Objective          string             `json:"objectiveType"`
+	Locale             *Locale            `json:"locale,omitempty"`
+	DailyBudget        *Money             `json:"dailyBudget,omitempty"`
+	TotalBudget        *Money             `json:"totalBudget,omitempty"`
+	RunSchedule        *DateRange         `json:"runSchedule,omitempty"`
+	CostType           string             `json:"costType"`
+	UnitCost           *Money             `json:"unitCost,omitempty"`
+	TargetingCriteria  *TargetingCriteria `json:"targetingCriteria,omitempty"`
+	OptimizationTarget string             `json:"optimizationTargetType,omitempty"`
+	ServingStatuses    []string           `json:"servingStatuses,omitempty"`
+	Format             string             `json:"format,omitempty"`
+}
+
+// TargetingCriteria mirrors the LinkedIn targeting structure. Include uses the
+// AND-of-OR shape (list of clauses, each with a facet→values "or" map).
+// Exclude is a single facet→values map under "or".
+type TargetingCriteria struct {
+	Include *TargetingInclude `json:"include,omitempty"`
+	Exclude *TargetingClause  `json:"exclude,omitempty"`
+}
+
+// TargetingInclude is a list of AND-ed TargetingClauses.
+type TargetingInclude struct {
+	And []TargetingClause `json:"and,omitempty"`
+}
+
+// TargetingClause is a facet→values map wrapped under "or".
+type TargetingClause struct {
+	Or map[string][]string `json:"or"`
+}
+
+// IncludedFacets flattens all include clauses into a single facet→values map.
+// Multiple clauses on the same facet are concatenated.
+func (t *TargetingCriteria) IncludedFacets() map[string][]string {
+	out := map[string][]string{}
+	if t == nil || t.Include == nil {
+		return out
+	}
+	for _, c := range t.Include.And {
+		for facet, vals := range c.Or {
+			out[facet] = append(out[facet], vals...)
+		}
+	}
+	return out
+}
+
+// ExcludedFacets returns the exclude side as a facet→values map.
+func (t *TargetingCriteria) ExcludedFacets() map[string][]string {
+	if t == nil || t.Exclude == nil {
+		return map[string][]string{}
+	}
+	return t.Exclude.Or
 }
 
 // ListCampaigns returns campaigns under the given account id (bare). When
