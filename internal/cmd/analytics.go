@@ -290,7 +290,7 @@ func newAnalyticsReachCmd() *cobra.Command {
 					fmt.Fprintf(&b, "%7d %12d %12.6f\n", r.Impressions, r.MemberReach, r.AudiencePenetration)
 				}
 				return b.String()
-			}, compactAnalyticsRow)
+			}, compactReachRow)
 		},
 	}
 	cmd.Flags().String("campaign", "", "Campaign id (required)")

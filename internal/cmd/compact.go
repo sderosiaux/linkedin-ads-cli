@@ -68,3 +68,15 @@ func compactAnalyticsRow(v any) any {
 		Conversions int64          `json:"externalWebsiteConversions,omitempty"`
 	}{r.DateRange, r.Impressions, r.Clicks, r.CostInUsd, r.Conversions}
 }
+
+// compactReachRow projects an AnalyticsRow to reach-specific fields:
+// dateRange, impressions, approximateMemberReach, audiencePenetration.
+func compactReachRow(v any) any {
+	r := v.(api.AnalyticsRow)
+	return struct {
+		DateRange           map[string]any `json:"dateRange,omitempty"`
+		Impressions         int64          `json:"impressions"`
+		MemberReach         int64          `json:"approximateMemberReach,omitempty"`
+		AudiencePenetration float64        `json:"audiencePenetration,omitempty"`
+	}{r.DateRange, r.Impressions, r.MemberReach, r.AudiencePenetration}
+}

@@ -299,6 +299,38 @@ func TestAnalyticsReach_JSON(t *testing.T) {
 	}
 }
 
+func TestAnalyticsReach_Compact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[{"impressions":1,"approximateMemberReach":500,"audiencePenetration":0.123}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("LINKEDIN_ADS_BASE_URL", srv.URL)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{"--config", cfgPath, "--json", "--compact", "analytics", "reach", "--campaign", "42"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, `"approximateMemberReach"`) {
+		t.Errorf("compact reach should keep approximateMemberReach, got: %s", s)
+	}
+	if !strings.Contains(s, `"audiencePenetration"`) {
+		t.Errorf("compact reach should keep audiencePenetration, got: %s", s)
+	}
+	// Generic compact fields that shouldn't be in reach output.
+	if strings.Contains(s, `"costInUsd"`) {
+		t.Errorf("compact reach should not include costInUsd, got: %s", s)
+	}
+}
+
 func TestAnalyticsReach_92DayLimit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
