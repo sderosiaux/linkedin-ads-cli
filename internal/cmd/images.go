@@ -41,6 +41,9 @@ func newImagesUploadCmd() *cobra.Command {
 					acct = a
 				}
 			}
+			if assetName != "" && acct == "" {
+				return fmt.Errorf("--name requires an account context (pass --account <id> or run 'linkedin-ads use-account <id>')")
+			}
 			ownerURN := urn.Wrap(urn.Organization, ownerID)
 
 			payload := map[string]any{

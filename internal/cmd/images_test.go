@@ -42,6 +42,37 @@ func TestImagesUpload_DryRun(t *testing.T) {
 	}
 }
 
+func TestImagesUpload_NameRequiresAccount(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	// No DefaultAccount set.
+	if err := config.Save(cfgPath, &config.Config{Token: "x", APIVersion: "202601"}); err != nil { //nolint:gosec // test fixture, not a real token
+		t.Fatal(err)
+	}
+	imgPath := filepath.Join(dir, "test.png")
+	if err := os.WriteFile(imgPath, []byte("png"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs([]string{
+		"--config", cfgPath, "--dry-run",
+		"images", "upload",
+		"--file", imgPath, "--owner", "789", "--name", "my-asset",
+	})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error when --name is set without --account")
+	}
+	if !strings.Contains(err.Error(), "--name requires") {
+		t.Errorf("error should mention --name requires account, got: %v", err)
+	}
+}
+
 func TestImagesUpload_E2E(t *testing.T) {
 	dir := t.TempDir()
 	imgPath := filepath.Join(dir, "test.png")
