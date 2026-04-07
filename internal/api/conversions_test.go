@@ -83,6 +83,12 @@ func TestGetConversionPerformance(t *testing.T) {
 		if !strings.Contains(raw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)") {
 			t.Errorf("missing accounts list in: %s", raw)
 		}
+		if !strings.Contains(raw, "fields=") {
+			t.Errorf("missing fields= in: %s", raw)
+		}
+		if !strings.Contains(raw, "externalWebsiteConversions") {
+			t.Errorf("missing conversion-specific field in: %s", raw)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"elements": []map[string]any{
 				{

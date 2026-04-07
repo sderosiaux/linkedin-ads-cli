@@ -75,6 +75,11 @@ func ListLeadForms(ctx context.Context, c *client.Client, accountID string, limi
 	return out, json.Unmarshal(b, &out)
 }
 
+// leadPerformanceFields is the field set for lead performance queries, matching
+// the MCP's LEAD_METRICS.
+const leadPerformanceFields = "oneClickLeads,oneClickLeadFormOpens,qualifiedLeads," +
+	"costInUsd,impressions,clicks,pivotValues,dateRange"
+
 // LeadPerformanceRow is a single /adAnalytics row pivoted by LEAD_GEN_FORM.
 // pivotValue holds the lead-gen form URN.
 type LeadPerformanceRow struct {
@@ -105,6 +110,7 @@ func GetLeadPerformance(ctx context.Context, c *client.Client, accountID, formID
 		formURN := EncodeURNForList("urn:li:leadGenForm:" + formID)
 		parts = append(parts, "leadGenForms=List("+formURN+")")
 	}
+	parts = append(parts, "fields="+leadPerformanceFields)
 	rawQuery := strings.Join(parts, "&")
 	var page struct {
 		Elements []LeadPerformanceRow `json:"elements"`

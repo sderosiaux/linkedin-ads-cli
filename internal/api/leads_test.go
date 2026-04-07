@@ -78,6 +78,8 @@ func TestGetLeadPerformance(t *testing.T) {
 			"q=analytics",
 			"pivot=LEAD_GEN_FORM",
 			"accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)",
+			"fields=",
+			"oneClickLeads",
 		} {
 			if !strings.Contains(raw, want) {
 				t.Errorf("raw query missing %q in: %s", want, raw)

@@ -35,6 +35,11 @@ func ListConversions(ctx context.Context, c *client.Client, accountID string, li
 	return out, nil
 }
 
+// conversionPerformanceFields is the field set for conversion performance
+// queries, matching the MCP's CONVERSION_METRICS.
+const conversionPerformanceFields = "externalWebsiteConversions,externalWebsitePostClickConversions," +
+	"costInUsd,conversionValueInLocalCurrency,externalWebsitePostViewConversions,pivotValues,dateRange"
+
 // ConversionPerformanceRow is a single /adAnalytics row pivoted by CONVERSION.
 // pivotValue holds the conversion URN; metrics are rolled up across the date
 // range with timeGranularity=ALL.
@@ -53,8 +58,8 @@ type ConversionPerformanceRow struct {
 // rejects it. The CLI command surfaces the raw error to the user in that case.
 func GetConversionPerformance(ctx context.Context, c *client.Client, accountID string, start, end time.Time) ([]ConversionPerformanceRow, error) {
 	accountURN := EncodeURNForList(urn.Wrap(urn.Account, accountID))
-	rawQuery := fmt.Sprintf("q=analytics&pivot=CONVERSION&timeGranularity=ALL&dateRange=%s&accounts=List(%s)",
-		formatDateRange(start, end), accountURN)
+	rawQuery := fmt.Sprintf("q=analytics&pivot=CONVERSION&timeGranularity=ALL&dateRange=%s&accounts=List(%s)&fields=%s",
+		formatDateRange(start, end), accountURN, conversionPerformanceFields)
 	var page struct {
 		Elements []ConversionPerformanceRow `json:"elements"`
 	}
