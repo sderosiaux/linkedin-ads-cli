@@ -164,6 +164,31 @@ linkedin-ads campaigns create \
     --start 2026-04-01
 ```
 
+Creatives:
+
+```bash
+# Create a creative referencing an existing post
+linkedin-ads creatives create --campaign 12345 --content-reference urn:li:share:789
+
+# Create a creative with inline post content (no existing post needed)
+linkedin-ads creatives create-inline \
+    --campaign 12345 --org 456 --text "Check this out" \
+    --image urn:li:image:ABC --landing-page https://example.com
+
+# Change a creative's intended status
+linkedin-ads creatives update-status urn:li:sponsoredCreative:123456789 --status PAUSED
+```
+
+Images:
+
+```bash
+# Upload an image for use in ad creatives
+linkedin-ads images upload --file banner.png --owner 456
+
+# Upload with media library registration
+linkedin-ads images upload --file banner.png --owner 456 --account 12345678 --name "Q2 Banner"
+```
+
 ## LLM and script usage
 
 Add `--json` to any command for structured output. Add `--compact` to strip non-essential fields:
@@ -284,7 +309,7 @@ Writes are explicit. Every create, update, and delete:
 3. Logs a `correlation-id: <uuid>` line to stderr before firing, so you can trace the call in LinkedIn's activity log.
 4. `--dry-run` stops at step 1 and prints the request that would be sent.
 
-There is no bulk delete. There is no write path for creatives, audiences, conversions, or lead forms.
+There is no bulk delete. There is no write path for audiences, conversions, or lead forms.
 
 ## Contributing
 
