@@ -244,7 +244,7 @@ func newCreativesGetCmd() *cobra.Command {
 			}
 			return writeOutput(cmd, cr, func() string {
 				return fmt.Sprintf("ID:       %s\nStatus:   %s\nIntended: %s\nReview:   %s\nCampaign: %s\n",
-					cr.ID, cr.Status, cr.IntendedStatus, cr.Review, cr.Campaign)
+					cr.ID, cr.Status, cr.IntendedStatus, cr.ReviewStatus(), cr.Campaign)
 			})
 		},
 	}
