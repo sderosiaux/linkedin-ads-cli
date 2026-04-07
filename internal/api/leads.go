@@ -91,25 +91,19 @@ type LeadPerformanceRow struct {
 	CostInUsd        string `json:"costInUsd"`
 }
 
-// GetLeadPerformance returns per-form performance rows for an account over the
-// given date range. When formID is non-empty, results are filtered to that
-// single form; otherwise rows are returned for every form active in the range.
-//
-// pivot=LEAD_GEN_FORM is not verified against production — adjust if LinkedIn
-// rejects it. The CLI command surfaces the raw error to the user in that case.
+// GetLeadPerformance returns lead-gen performance rows for an account over the
+// given date range. Uses pivot=CAMPAIGN with lead-gen metrics (matching the MCP
+// reference). LEAD_GEN_FORM is not a valid LinkedIn pivot enum.
 func GetLeadPerformance(ctx context.Context, c *client.Client, accountID, formID string, start, end time.Time) ([]LeadPerformanceRow, error) {
 	accountURN := EncodeURNForList(urn.Wrap(urn.Account, accountID))
 	parts := []string{
 		"q=analytics",
-		"pivot=LEAD_GEN_FORM",
+		"pivot=CAMPAIGN",
 		"timeGranularity=ALL",
 		"dateRange=" + formatDateRange(start, end),
 		"accounts=List(" + accountURN + ")",
 	}
-	if formID != "" {
-		formURN := EncodeURNForList("urn:li:leadGenForm:" + formID)
-		parts = append(parts, "leadGenForms=List("+formURN+")")
-	}
+	_ = formID // form-level filtering not supported with pivot=CAMPAIGN; kept for API compat
 	parts = append(parts, "fields="+leadPerformanceFields)
 	rawQuery := strings.Join(parts, "&")
 	var page struct {

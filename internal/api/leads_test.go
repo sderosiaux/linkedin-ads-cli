@@ -76,7 +76,7 @@ func TestGetLeadPerformance(t *testing.T) {
 		raw := r.URL.RawQuery
 		for _, want := range []string{
 			"q=analytics",
-			"pivot=LEAD_GEN_FORM",
+			"pivot=CAMPAIGN",
 			"accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)",
 			"fields=",
 			"oneClickLeads",
@@ -116,12 +116,12 @@ func TestGetLeadPerformance(t *testing.T) {
 	}
 }
 
-func TestGetLeadPerformance_FormFilter(t *testing.T) {
+func TestGetLeadPerformance_UsesCampaignPivot(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "leadGenForms=List(urn%3Ali%3AleadGenForm%3A42)") {
-			t.Errorf("missing leadGenForms filter in: %s", raw)
+		if !strings.Contains(raw, "pivot=CAMPAIGN") {
+			t.Errorf("expected pivot=CAMPAIGN in: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[]}`))
 	}))
@@ -130,7 +130,7 @@ func TestGetLeadPerformance_FormFilter(t *testing.T) {
 	c := client.New(client.Options{BaseURL: srv.URL, Token: "x", APIVersion: "202601"}) //nolint:gosec // test fixture, not a real token
 	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
-	if _, err := GetLeadPerformance(context.Background(), c, "12345", "42", start, end); err != nil {
+	if _, err := GetLeadPerformance(context.Background(), c, "12345", "", start, end); err != nil {
 		t.Fatal(err)
 	}
 }

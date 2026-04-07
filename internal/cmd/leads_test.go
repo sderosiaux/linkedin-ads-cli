@@ -85,8 +85,8 @@ func TestLeadsPerformance_JSON(t *testing.T) {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "pivot=LEAD_GEN_FORM") {
-			t.Errorf("missing pivot=LEAD_GEN_FORM in: %s", raw)
+		if !strings.Contains(raw, "pivot=CAMPAIGN") {
+			t.Errorf("missing pivot=CAMPAIGN in: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[
 			{"pivotValue":"urn:li:leadGenForm:1","impressions":1000,"clicks":50,"oneClickLeads":7,"costInUsd":"12.34"}
@@ -115,11 +115,11 @@ func TestLeadsPerformance_JSON(t *testing.T) {
 	}
 }
 
-func TestLeadsPerformance_FormFlag(t *testing.T) {
+func TestLeadsPerformance_WithAccount(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.RawQuery
-		if !strings.Contains(raw, "leadGenForms=List(urn%3Ali%3AleadGenForm%3A42)") {
-			t.Errorf("missing form filter in: %s", raw)
+		if !strings.Contains(raw, "pivot=CAMPAIGN") {
+			t.Errorf("missing pivot=CAMPAIGN in: %s", raw)
 		}
 		_, _ = w.Write([]byte(`{"elements":[]}`))
 	}))
@@ -137,7 +137,7 @@ func TestLeadsPerformance_FormFlag(t *testing.T) {
 	out := &bytes.Buffer{}
 	root.SetOut(out)
 	root.SetErr(out)
-	root.SetArgs([]string{"--config", cfgPath, "--json", "leads", "performance", "--form", "42"})
+	root.SetArgs([]string{"--config", cfgPath, "--json", "leads", "performance"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\n%s", err, out.String())
 	}

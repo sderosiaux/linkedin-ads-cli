@@ -47,11 +47,13 @@ func Save(path string, c *Config) error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-// DefaultPath returns the default location of the config file:
-// ~/.config/linkedin-ads/config.yaml. Always uses $HOME/.config (XDG convention
-// for CLI tools) rather than os.UserConfigDir which returns ~/Library/Application
-// Support on macOS — wrong for a terminal tool.
+// DefaultPath returns the default location of the config file following the
+// XDG Base Directory Specification: $XDG_CONFIG_HOME/linkedin-ads/config.yaml.
+// Falls back to ~/.config/linkedin-ads/config.yaml when XDG_CONFIG_HOME is unset.
 func DefaultPath() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "linkedin-ads", "config.yaml")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(".config", "linkedin-ads", "config.yaml")

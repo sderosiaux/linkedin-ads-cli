@@ -44,8 +44,7 @@ func newLeadsPerformanceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			formID, _ := cmd.Flags().GetString("form")
-			rows, err := api.GetLeadPerformance(cmd.Context(), c, accountID, formID, start, end)
+			rows, err := api.GetLeadPerformance(cmd.Context(), c, accountID, "", start, end)
 			if err != nil {
 				return err
 			}
@@ -63,7 +62,6 @@ func newLeadsPerformanceCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("form", "", "Filter by lead-gen form id")
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	return cmd
