@@ -12,9 +12,14 @@ import (
 func newConversionsCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "conversions",
-		Short: "List conversion definitions",
+		Short: "List conversion definitions and upload offline events",
 	}
-	root.AddCommand(newConversionsListCmd(), newConversionsPerformanceCmd())
+	root.AddCommand(
+		newConversionsListCmd(),
+		newConversionsPerformanceCmd(),
+		newConversionsTrackCmd(),
+		newConversionsTrackBatchCmd(),
+	)
 	return root
 }
 

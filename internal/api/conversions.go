@@ -51,6 +51,47 @@ type ConversionPerformanceRow struct {
 	CostInUsd   string `json:"costInUsd"`
 }
 
+// ConversionEventInput is the request body for POST /conversionEvents. The
+// LinkedIn Conversions API expects the conversion URN under the
+// llaPartnerConversion namespace, an epoch-millis timestamp, a userIds array
+// (CLI uses SHA256_EMAIL only), an optional value, and a caller-provided
+// eventId for idempotency.
+type ConversionEventInput struct {
+	Conversion           string                `json:"conversion"`
+	ConversionHappenedAt int64                 `json:"conversionHappenedAt"`
+	User                 ConversionEventUser   `json:"user"`
+	ConversionValue      *ConversionEventValue `json:"conversionValue,omitempty"`
+	EventID              string                `json:"eventId,omitempty"`
+}
+
+// ConversionEventUser wraps the user matching identifiers — CLI only sends
+// SHA256_EMAIL.
+type ConversionEventUser struct {
+	UserIDs []ConversionUserID `json:"userIds"`
+}
+
+// ConversionUserID is a single id-type / id-value pair.
+type ConversionUserID struct {
+	IDType  string `json:"idType"`
+	IDValue string `json:"idValue"`
+}
+
+// ConversionEventValue carries the optional cash value (currency + amount).
+type ConversionEventValue struct {
+	CurrencyCode string `json:"currencyCode"`
+	Amount       string `json:"amount"`
+}
+
+// PostConversionEvent uploads a single offline conversion event to LinkedIn's
+// Conversions API. Returns the new event id from X-RestLi-Id when present.
+//
+// The token must have the "Conversions API" product enabled — without it,
+// LinkedIn returns 403 with a hint to request the product in the developer
+// portal.
+func PostConversionEvent(ctx context.Context, c *client.Client, in *ConversionEventInput) (string, error) {
+	return c.PostJSON(ctx, "/conversionEvents", in, nil)
+}
+
 // GetConversionPerformance returns per-conversion performance rows for the
 // account over the given date range.
 //
