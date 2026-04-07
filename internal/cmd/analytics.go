@@ -178,23 +178,84 @@ func newAnalyticsCampaignsCmd() *cobra.Command {
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	cmd.Flags().String("granularity", "ALL", "DAILY, MONTHLY, or ALL")
 	addDerivedFlag(cmd)
+	addAnnotateFlag(cmd)
 	return cmd
 }
 
 // writeAnalyticsRows is the shared output path for all analytics commands. It
-// honours --derived (terminal columns + JSON _derived field).
+// honours --derived (terminal columns + JSON _derived field) and --annotate
+// (terminal FLAG column + JSON _flags field). Annotation tags are computed
+// over the row set so the medians reflect what the user actually sees.
 func writeAnalyticsRows(cmd *cobra.Command, rows []api.AnalyticsRow) error {
 	derived := derivedFlag(cmd)
+	annotate := annotateFlag(cmd)
+	var flags [][]string
+	if annotate {
+		flags = annotationsFor(rows)
+	}
 	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
 	if jsonOut {
-		if !derived {
+		if !derived && !annotate {
 			return writeOutput(cmd, rows, func() string { return "" }, compactAnalyticsRow)
 		}
-		return writeOutput(cmd, rowsWithDerived(rows), func() string { return "" })
+		wrapped := rowsWithDerived(rows)
+		if annotate {
+			for i := range wrapped {
+				if i < len(flags) {
+					wrapped[i]["_flags"] = flags[i]
+				}
+			}
+		}
+		if !derived {
+			for i := range wrapped {
+				delete(wrapped[i], "_derived")
+			}
+		}
+		return writeOutput(cmd, wrapped, func() string { return "" })
 	}
 	return writeOutput(cmd, rows, func() string {
-		return formatAnalyticsRows(rows, derived)
+		return formatAnalyticsRowsAnnotated(rows, derived, annotate, flags)
 	})
+}
+
+// formatAnalyticsRowsAnnotated is the same as formatAnalyticsRows but appends
+// a FLAG column when annotate is true. When annotate is false this is exactly
+// equivalent to formatAnalyticsRows(rows, derived).
+func formatAnalyticsRowsAnnotated(rows []api.AnalyticsRow, derived, annotate bool, flags [][]string) string {
+	if !annotate {
+		return formatAnalyticsRows(rows, derived)
+	}
+	var b strings.Builder
+	if derived {
+		b.WriteString("PIVOT                          IMPR    CLICKS  CTR     CPC      CPM        SPEND      LEADS  CPL        FLAG\n")
+	} else {
+		b.WriteString("PIVOT                          IMPR    CLICKS    SPEND      CONV  LEADS  FLAG\n")
+	}
+	for i, r := range rows {
+		pivot := truncate(truncateURN(pivotDisplay(r), 4), 30)
+		var tag string
+		if i < len(flags) {
+			tag = formatRowFlags(flags[i])
+		}
+		if derived {
+			d := r.DerivedMetrics()
+			leads := r.OneClickLeads + r.Conversions
+			fmt.Fprintf(&b, "%-30s %7s %7s %7s %8s %10s %10s %6d %9s  %s\n",
+				pivot,
+				formatInt(r.Impressions), formatInt(r.Clicks),
+				formatPercent(d["ctr"]),
+				formatMoney(d["cpc"]),
+				formatMoney(d["cpm"]),
+				formatMoneyString(r.CostInUsd),
+				leads,
+				formatMoney(d["cpl"]),
+				tag)
+		} else {
+			fmt.Fprintf(&b, "%-30s %7s %7s %10s %5d %6d  %s\n",
+				pivot, formatInt(r.Impressions), formatInt(r.Clicks), formatMoneyString(r.CostInUsd), r.Conversions, r.OneClickLeads, tag)
+		}
+	}
+	return b.String()
 }
 
 // pivotDisplay returns the best available pivot identifier for terminal output.
@@ -294,6 +355,7 @@ func newAnalyticsCreativesCmd() *cobra.Command {
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	cmd.Flags().String("granularity", "ALL", "DAILY, MONTHLY, or ALL")
 	addDerivedFlag(cmd)
+	addAnnotateFlag(cmd)
 	return cmd
 }
 
@@ -413,6 +475,7 @@ func newAnalyticsDailyTrendsCmd() *cobra.Command {
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	addDerivedFlag(cmd)
+	addAnnotateFlag(cmd)
 	return cmd
 }
 
@@ -521,6 +584,7 @@ func newAnalyticsCompareCmd() *cobra.Command {
 	cmd.Flags().String("start", "", "Start date YYYY-MM-DD (default: 30 days before --end)")
 	cmd.Flags().String("end", "", "End date YYYY-MM-DD (default: today)")
 	addDerivedFlag(cmd)
+	addAnnotateFlag(cmd)
 	return cmd
 }
 
