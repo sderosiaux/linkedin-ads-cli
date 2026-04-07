@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,7 +23,21 @@ type overviewJSON struct {
 	SpendLast7d          float64             `json:"spend_last_7d"`
 	ImpressionsLast7d    int64               `json:"impressions_last_7d"`
 	ClicksLast7d         int64               `json:"clicks_last_7d"`
+	TopSpend             []overviewTopRow    `json:"top_spend,omitempty"`
+	TopLeads             []overviewTopRow    `json:"top_leads,omitempty"`
+	BudgetCap            float64             `json:"budget_cap,omitempty"`
+	BudgetUtilization    float64             `json:"budget_utilization,omitempty"`
+	ConversionTracking   string              `json:"conversion_tracking,omitempty"`
 	AnalyticsUnavailable bool                `json:"analytics_unavailable,omitempty"`
+}
+
+// overviewTopRow is a top-N entry (by spend or by leads) with optional CPL
+// for the leads variant.
+type overviewTopRow struct {
+	Name  string  `json:"name"`
+	Spend float64 `json:"spend,omitempty"`
+	Leads int64   `json:"leads,omitempty"`
+	CPL   float64 `json:"cpl,omitempty"`
 }
 
 type overviewAccountJSON struct {
@@ -121,9 +136,127 @@ func runOverview(cmd *cobra.Command, _ []string) error {
 		AnalyticsUnavailable: analyticsUnavailable,
 	}
 
+	if !analyticsUnavailable {
+		// Top 3 by spend / leads (last 7d).
+		data.TopSpend = top3CampaignsBySpend(camps, rows)
+		data.TopLeads = top3CampaignsByLeads(camps, rows)
+		// Budget utilization: sum of daily caps × 7 (since the analytics window
+		// is 7 days) vs actual 7-day spend.
+		var dailyCap float64
+		for _, c := range camps {
+			if c.Status == "ACTIVE" && c.DailyBudget != nil {
+				if v, err := strconv.ParseFloat(c.DailyBudget.Amount, 64); err == nil {
+					dailyCap += v
+				}
+			}
+		}
+		data.BudgetCap = dailyCap * 7
+		if data.BudgetCap > 0 {
+			data.BudgetUtilization = spend / data.BudgetCap * 100
+		}
+		// Conversion tracking status: BROKEN if every active row reports 0
+		// conversions and 0 leads despite spend; OK otherwise.
+		data.ConversionTracking = inferConversionTrackingStatus(rows)
+	}
+
 	return writeOutput(cmd, data, func() string {
 		return formatOverview(data, analyticsUnavailable)
 	})
+}
+
+// top3CampaignsBySpend ranks active campaigns by 7-day spend.
+func top3CampaignsBySpend(camps []api.Campaign, rows []api.AnalyticsRow) []overviewTopRow {
+	spendByID := map[int64]float64{}
+	for _, r := range rows {
+		urn := pivotDisplay(r)
+		const prefix = "urn:li:sponsoredCampaign:"
+		if !strings.HasPrefix(urn, prefix) {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimPrefix(urn, prefix), 10, 64)
+		if err != nil {
+			continue
+		}
+		v, _ := strconv.ParseFloat(r.CostInUsd, 64)
+		spendByID[id] += v
+	}
+	rowsOut := make([]overviewTopRow, 0, len(camps))
+	for _, c := range camps {
+		if c.Status != "ACTIVE" {
+			continue
+		}
+		if v, ok := spendByID[c.ID]; ok && v > 0 {
+			rowsOut = append(rowsOut, overviewTopRow{Name: c.Name, Spend: v})
+		}
+	}
+	sort.Slice(rowsOut, func(i, j int) bool { return rowsOut[i].Spend > rowsOut[j].Spend })
+	if len(rowsOut) > 3 {
+		rowsOut = rowsOut[:3]
+	}
+	return rowsOut
+}
+
+// top3CampaignsByLeads ranks active campaigns by 7-day leads
+// (oneClickLeads + externalWebsiteConversions). CPL is included where
+// computable.
+func top3CampaignsByLeads(camps []api.Campaign, rows []api.AnalyticsRow) []overviewTopRow {
+	leadsByID := map[int64]int64{}
+	spendByID := map[int64]float64{}
+	for _, r := range rows {
+		urn := pivotDisplay(r)
+		const prefix = "urn:li:sponsoredCampaign:"
+		if !strings.HasPrefix(urn, prefix) {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimPrefix(urn, prefix), 10, 64)
+		if err != nil {
+			continue
+		}
+		leadsByID[id] += r.OneClickLeads + r.Conversions
+		v, _ := strconv.ParseFloat(r.CostInUsd, 64)
+		spendByID[id] += v
+	}
+	rowsOut := make([]overviewTopRow, 0, len(camps))
+	for _, c := range camps {
+		if c.Status != "ACTIVE" {
+			continue
+		}
+		l := leadsByID[c.ID]
+		if l == 0 {
+			continue
+		}
+		row := overviewTopRow{Name: c.Name, Leads: l}
+		if l > 0 {
+			row.CPL = spendByID[c.ID] / float64(l)
+		}
+		rowsOut = append(rowsOut, row)
+	}
+	sort.Slice(rowsOut, func(i, j int) bool { return rowsOut[i].Leads > rowsOut[j].Leads })
+	if len(rowsOut) > 3 {
+		rowsOut = rowsOut[:3]
+	}
+	return rowsOut
+}
+
+// inferConversionTrackingStatus returns "OK", "WARN", or "BROKEN" based on
+// the spend-vs-conversions ratio of the rows. BROKEN means rows report spend
+// > 0 but every row reports 0 conversions and 0 leads.
+func inferConversionTrackingStatus(rows []api.AnalyticsRow) string {
+	var totalSpend float64
+	var totalConv, totalLeads int64
+	for _, r := range rows {
+		v, _ := strconv.ParseFloat(r.CostInUsd, 64)
+		totalSpend += v
+		totalConv += r.Conversions
+		totalLeads += r.OneClickLeads
+	}
+	if totalSpend == 0 {
+		return "IDLE"
+	}
+	if totalConv == 0 && totalLeads == 0 {
+		return "BROKEN"
+	}
+	return "OK"
 }
 
 func countCampaignGroups(groups []api.CampaignGroup) overviewCountsJSON {
@@ -218,19 +351,47 @@ func formatInt(v int64) string {
 
 func formatOverview(d overviewJSON, analyticsUnavailable bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Account:          %s (%d)\n", d.Account.Name, d.Account.ID)
-	fmt.Fprintf(&b, "Currency:         %s\n", d.Account.Currency)
+	fmt.Fprintf(&b, "Account:             %s (%d)\n", d.Account.Name, d.Account.ID)
+	fmt.Fprintf(&b, "Currency:            %s\n", d.Account.Currency)
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "Campaign Groups:  %d active / %d total\n", d.CampaignGroups.Active, d.CampaignGroups.Total)
-	fmt.Fprintf(&b, "Campaigns:        %d active / %d paused / %d total\n", d.Campaigns.Active, d.Campaigns.Paused, d.Campaigns.Total)
+	fmt.Fprintf(&b, "Campaign Groups:     %d active / %d total\n", d.CampaignGroups.Active, d.CampaignGroups.Total)
+	fmt.Fprintf(&b, "Campaigns:           %d active / %d paused / %d total\n", d.Campaigns.Active, d.Campaigns.Paused, d.Campaigns.Total)
 	if analyticsUnavailable {
-		b.WriteString("Spend (last 7d):  (unavailable)\n")
-		b.WriteString("Impressions (7d): (unavailable)\n")
-		b.WriteString("Clicks (7d):      (unavailable)\n")
-	} else {
-		fmt.Fprintf(&b, "Spend (last 7d):  %s\n", formatMoney(d.SpendLast7d))
-		fmt.Fprintf(&b, "Impressions (7d): %s\n", formatInt(d.ImpressionsLast7d))
-		fmt.Fprintf(&b, "Clicks (7d):      %s\n", formatInt(d.ClicksLast7d))
+		b.WriteString("\nLast 7d:\n  (unavailable)\n")
+		return b.String()
+	}
+	b.WriteString("\nLast 7d:\n")
+	fmt.Fprintf(&b, "  Spend:             %s\n", formatMoney(d.SpendLast7d))
+	fmt.Fprintf(&b, "  Impressions:       %s\n", formatInt(d.ImpressionsLast7d))
+	fmt.Fprintf(&b, "  Clicks:            %s\n", formatInt(d.ClicksLast7d))
+	if len(d.TopSpend) > 0 {
+		b.WriteString("\nTop 3 by spend:\n")
+		for _, t := range d.TopSpend {
+			fmt.Fprintf(&b, "  %-30s %s\n", truncate(t.Name, 30), formatMoney(t.Spend))
+		}
+	}
+	if len(d.TopLeads) > 0 {
+		b.WriteString("\nTop 3 by leads:\n")
+		for _, t := range d.TopLeads {
+			cpl := ""
+			if t.CPL > 0 {
+				cpl = fmt.Sprintf(" (%s CPL)", formatMoney(t.CPL))
+			}
+			fmt.Fprintf(&b, "  %-30s %d leads%s\n", truncate(t.Name, 30), t.Leads, cpl)
+		}
+	}
+	if d.BudgetCap > 0 {
+		fmt.Fprintf(&b, "\nBudget utilization:  %s / %s cap (%.0f%%)\n", formatMoney(d.SpendLast7d), formatMoney(d.BudgetCap), d.BudgetUtilization)
+	}
+	if d.ConversionTracking != "" {
+		icon := "✓"
+		switch d.ConversionTracking {
+		case "BROKEN":
+			icon = "⚠️"
+		case "WARN":
+			icon = "⚠️"
+		}
+		fmt.Fprintf(&b, "Conversion tracking: %s %s\n", icon, d.ConversionTracking)
 	}
 	return b.String()
 }
