@@ -214,7 +214,10 @@ func formatCampaignGet(camp *api.Campaign, rows []api.AnalyticsRow) string {
 			spend30d += v
 		}
 	}
-	if spend30d > 0 || len(rows) > 0 {
+	// Always show the spend line when we have a daily budget — a $0 row on a
+	// paused campaign is itself a useful signal, and the next "Avg daily" line
+	// would otherwise reference a number the reader can't see.
+	if dailyBudget > 0 || spend30d > 0 || len(rows) > 0 {
 		fmt.Fprintf(&b, "Last 30d spend: %s\n", formatMoney(spend30d))
 	}
 	if dailyBudget > 0 && (runDays > 0 || spend30d > 0) {
