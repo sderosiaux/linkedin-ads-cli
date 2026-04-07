@@ -32,6 +32,14 @@ type AnalyticsRow struct {
 	VideoQ3             int64          `json:"videoThirdQuartileCompletions,omitempty"`
 }
 
+// defaultAnalyticsFields is the set of metrics to request from /adAnalytics.
+// Without an explicit fields param LinkedIn returns only a default subset that
+// excludes costInUsd and other useful metrics.
+const defaultAnalyticsFields = "impressions,clicks,costInUsd,costInLocalCurrency," +
+	"externalWebsiteConversions,oneClickLeads,approximateUniqueImpressions," +
+	"pivotValues,dateRange,videoViews,videoStarts,videoCompletions," +
+	"videoFirstQuartileCompletions,videoMidpointCompletions,videoThirdQuartileCompletions"
+
 // formatDateRange renders a LinkedIn Rest.li dateRange tuple. The parens and
 // colons MUST NOT be percent-escaped — pass through GetJSONRawQuery only.
 func formatDateRange(start, end time.Time) string {
@@ -112,8 +120,16 @@ func GetDailyTrendsAnalytics(ctx context.Context, c *client.Client, accountID, c
 }
 
 // decodeAnalytics issues the raw-query GET against /adAnalytics and decodes the
-// shared envelope into a slice of rows.
+// shared envelope into a slice of rows. It appends the default fields param so
+// LinkedIn returns the full set of metrics (including costInUsd).
 func decodeAnalytics(ctx context.Context, c *client.Client, rawQuery string) ([]AnalyticsRow, error) {
+	return decodeAnalyticsWithFields(ctx, c, rawQuery, defaultAnalyticsFields)
+}
+
+// decodeAnalyticsWithFields is like decodeAnalytics but allows callers to
+// specify a custom fields set (e.g. reach-specific metrics).
+func decodeAnalyticsWithFields(ctx context.Context, c *client.Client, rawQuery, fields string) ([]AnalyticsRow, error) {
+	rawQuery += "&fields=" + fields
 	var env struct {
 		Elements json.RawMessage `json:"elements"`
 	}

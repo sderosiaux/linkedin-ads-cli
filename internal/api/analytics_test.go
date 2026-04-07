@@ -63,6 +63,12 @@ func TestGetCampaignAnalytics_BuildsRawQuery(t *testing.T) {
 	if !strings.Contains(gotRaw, "accounts=List(urn%3Ali%3AsponsoredAccount%3A12345)") {
 		t.Errorf("accounts list not in raw form: %s", gotRaw)
 	}
+	if !strings.Contains(gotRaw, "fields=") {
+		t.Errorf("missing fields param: %s", gotRaw)
+	}
+	if !strings.Contains(gotRaw, "costInUsd") {
+		t.Errorf("fields should include costInUsd: %s", gotRaw)
+	}
 
 	r0 := rows[0]
 	if r0.Impressions != 12345 || r0.Clicks != 234 || r0.CostInUsd != "78.90" {
