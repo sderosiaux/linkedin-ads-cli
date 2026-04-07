@@ -35,7 +35,9 @@ func TestResolverCachesAndFetches(t *testing.T) {
 
 func TestResolverGracefulOnFetchError(t *testing.T) {
 	t.Parallel()
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
@@ -44,6 +46,14 @@ func TestResolverGracefulOnFetchError(t *testing.T) {
 	got := r.Resolve(context.Background(), "urn:li:sponsoredCampaign:1")
 	if got != "urn:li:sponsoredCampaign:1" {
 		t.Errorf("expected URN as fallback, got %q", got)
+	}
+	// Failed lookups must not be cached — a second call should retry.
+	got2 := r.Resolve(context.Background(), "urn:li:sponsoredCampaign:1")
+	if got2 != "urn:li:sponsoredCampaign:1" {
+		t.Errorf("second call: expected URN fallback, got %q", got2)
+	}
+	if calls.Load() != 2 {
+		t.Errorf("expected 2 fetches (no negative cache), got %d", calls.Load())
 	}
 }
 

@@ -57,9 +57,13 @@ func (r *Resolver) Resolve(ctx context.Context, urn string) string {
 	r.mu.RUnlock()
 
 	name := r.fetch(ctx, urn)
-	r.mu.Lock()
-	r.cache[urn] = entry{name: name, expiresAt: time.Now().Add(r.ttl)}
-	r.mu.Unlock()
+	if name != urn {
+		// Only cache successful lookups. When fetch fails it returns the
+		// original URN; caching that would suppress retries for r.ttl.
+		r.mu.Lock()
+		r.cache[urn] = entry{name: name, expiresAt: time.Now().Add(r.ttl)}
+		r.mu.Unlock()
+	}
 	return name
 }
 
